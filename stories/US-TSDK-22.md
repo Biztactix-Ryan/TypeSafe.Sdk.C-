@@ -6,12 +6,13 @@ acceptance_criteria:
 - README install instructions reference the package id and the registry decision is
   recorded in DECISIONS.md
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-21
 epic_id: EPIC-TSDK-7
 id: US-TSDK-22
 points: 3
 priority: should
-status: backlog
+status: ready
 tags:
 - nuget
 - release

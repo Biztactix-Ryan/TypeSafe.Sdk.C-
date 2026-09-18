@@ -3,7 +3,7 @@ created: '2026-09-18'
 id: EPIC-TSDK-7
 points: null
 priority: should
-status: draft
+status: active
 tags:
 - release
 - ci

@@ -7,12 +7,13 @@ acceptance_criteria:
   they differ, and a distinct message when the name is absent
 - Answers, Nouls, Choices and Scores remain available
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-11
 epic_id: EPIC-TSDK-4
 id: US-TSDK-12
 points: 5
 priority: must
-status: backlog
+status: ready
 tags:
 - step-4
 - generics

@@ -7,12 +7,14 @@ acceptance_criteria:
 - A label not declared on the enum raises TypeSafeApiResponseValidationException at
   answers.<name>.choice
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-11
+- US-TSDK-12
 epic_id: EPIC-TSDK-5
 id: US-TSDK-14
 points: 5
 priority: should
-status: backlog
+status: ready
 tags:
 - step-5
 - generics

@@ -3,7 +3,7 @@ created: '2026-09-18'
 id: EPIC-TSDK-6
 points: null
 priority: should
-status: draft
+status: active
 tags:
 - typing-review
 - step-6

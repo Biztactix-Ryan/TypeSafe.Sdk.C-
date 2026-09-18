@@ -11,7 +11,7 @@ epic_id: EPIC-TSDK-7
 id: US-TSDK-21
 points: 3
 priority: should
-status: backlog
+status: ready
 tags:
 - ci
 title: GitHub Actions build, test and pack on push and PR

@@ -11,7 +11,7 @@ epic_id: EPIC-TSDK-6
 id: US-TSDK-18
 points: 2
 priority: should
-status: backlog
+status: ready
 tags:
 - step-6
 title: Expose HttpRequestError on connection exceptions

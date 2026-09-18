@@ -5,12 +5,13 @@ acceptance_criteria:
 - The README Differences section explains how typed answers compare to the JavaScript
   SDK's inference
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-12
 epic_id: EPIC-TSDK-4
 id: US-TSDK-13
 points: 2
 priority: should
-status: backlog
+status: ready
 tags:
 - step-4
 - docs

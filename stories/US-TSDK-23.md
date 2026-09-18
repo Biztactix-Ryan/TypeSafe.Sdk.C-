@@ -5,12 +5,16 @@ acceptance_criteria:
 - Changing a public signature fails the test until the snapshot is re-approved
 - CONTRIBUTING notes explain how to accept a snapshot change
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-11
+- US-TSDK-12
+- US-TSDK-14
+- US-TSDK-15
 epic_id: EPIC-TSDK-7
 id: US-TSDK-23
 points: 2
 priority: should
-status: backlog
+status: ready
 tags:
 - tests
 - api
