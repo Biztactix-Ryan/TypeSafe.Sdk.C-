@@ -5,7 +5,7 @@ deploy_branch: null
 description: ''
 name: TypeSafe.Sdk
 next_epic_id: 8
-next_sprint_id: 3
+next_sprint_id: 4
 next_story_id: 26
 prefix: TSDK
 repo: ''

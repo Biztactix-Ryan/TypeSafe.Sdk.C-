@@ -8,12 +8,13 @@ acceptance_criteria:
   by the caller
 - README has a DI section and the core package's dependency list is unchanged
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-20
 epic_id: EPIC-TSDK-7
 id: US-TSDK-25
 points: 5
 priority: could
-status: backlog
+status: ready
 tags:
 - di
 - package

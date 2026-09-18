@@ -4,9 +4,10 @@ assignee: null
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-20-6
 id: US-TSDK-20-2
-points: null
+points: 1
 status: todo
 story_id: US-TSDK-20
 tags: []

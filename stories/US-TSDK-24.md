@@ -12,7 +12,7 @@ epic_id: EPIC-TSDK-7
 id: US-TSDK-24
 points: 3
 priority: should
-status: backlog
+status: ready
 tags:
 - integration
 - tests

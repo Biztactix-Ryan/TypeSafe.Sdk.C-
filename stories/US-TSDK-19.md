@@ -11,7 +11,7 @@ epic_id: EPIC-TSDK-6
 id: US-TSDK-19
 points: 3
 priority: should
-status: backlog
+status: ready
 tags:
 - step-6
 - logging

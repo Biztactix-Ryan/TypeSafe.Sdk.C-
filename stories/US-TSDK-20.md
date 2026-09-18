@@ -8,12 +8,14 @@ acceptance_criteria:
   Answer>
 - Builders use params ReadOnlySpan<T> and lazy properties use the field keyword
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-17
+- US-TSDK-19
 epic_id: EPIC-TSDK-6
 id: US-TSDK-20
 points: 3
 priority: could
-status: backlog
+status: ready
 tags:
 - step-6
 - quality
