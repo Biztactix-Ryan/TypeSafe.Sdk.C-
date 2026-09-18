@@ -113,7 +113,7 @@ internal sealed class Transport
             catch (Exception error) when (error is not OperationCanceledException)
             {
                 response.Dispose();
-                var connectionError = new TypeSafeApiConnectionException($"Connection error: {error.Message}", error);
+                var connectionError = new TypeSafeApiConnectionException($"Connection error: {error.Message}", error, TransportErrorOf(error));
                 if (retriesLeft <= 0 || !policy.ShouldRetry(connectionError)) throw connectionError;
                 await BackOffAsync(tag, attempt, retriesLeft, connectionError.Message, null, policy, started, connectionError, cancellationToken).ConfigureAwait(false);
                 continue;
@@ -242,9 +242,12 @@ internal sealed class Transport
         catch (Exception error) when (error is HttpRequestException or IOException)
         {
             _log.Info($"{tag} connection error after {Elapsed(started)}: {error.Message}");
-            throw new TypeSafeApiConnectionException($"Connection error: {error.Message}", error);
+            throw new TypeSafeApiConnectionException($"Connection error: {error.Message}", error, TransportErrorOf(error));
         }
     }
+
+    /// <summary>The transport failure an exception names, or <c>null</c> when it is not an <see cref="HttpRequestException"/>.</summary>
+    private static HttpRequestError? TransportErrorOf(Exception error) => (error as HttpRequestException)?.HttpRequestError;
 
     /// <summary>Wait before retrying; throws the last error when the total budget would be exceeded and rethrows caller cancellation.</summary>
     private async Task BackOffAsync(

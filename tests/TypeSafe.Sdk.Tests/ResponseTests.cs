@@ -397,3 +397,144 @@ public class ResponseTests
         Assert.Equal(0.9, response.Nouls["yes"].Noul);
     }
 }
+
+/// <summary>
+/// Typed answer lookup: <c>response.Get(tone)</c> keyed by the named question itself, and the precise
+/// failures when the name is absent, the answer is of another type, or its type is one this SDK version
+/// does not model.
+/// </summary>
+public class TypedAnswerLookupTests
+{
+    private static readonly Named<NoulAnswer> Billing = Question.Named.Noul("billing", "Is this about billing?");
+
+    private static readonly Named<ChoiceAnswer> Tone =
+        Question.Named.Choice("tone", "What is the tone?", "calm", "frustrated", "angry");
+
+    private static readonly Named<ScoreAnswer> Urgency =
+        Question.Named.Score("urgency", "How urgent?", ["can wait", "this week", "today", "right now"]);
+
+    /// <summary>Answers the stub with <paramref name="body"/> and asks it through the named-question overload.</summary>
+    private static async Task<SystemOneResponse> Respond(string body = Http.SystemOneBody)
+    {
+        using var client = Clients.Create(new StubHandler((_, _) => Http.Json(200, body)));
+        return await client.SystemOneAsync("x", [Billing, Tone, Urgency]);
+    }
+
+    /// <summary>
+    /// The end-to-end path the story asks for: named questions in, typed answers out. The declared local
+    /// types are the compile-time half of the assertion — <c>Get</c> returning <see cref="Answer"/> would
+    /// not compile here.
+    /// </summary>
+    [Fact]
+    public async Task GetReturnsTheTypedAnswerForEachAnswerKind()
+    {
+        var response = await Respond();
+
+        NoulAnswer billing = response.Get(Billing);
+        ChoiceAnswer tone = response.Get(Tone);
+        ScoreAnswer urgency = response.Get(Urgency);
+
+        Assert.Equal(0.93, billing.Noul);
+        Assert.Equal("frustrated", tone.Choice);
+        Assert.Equal(0.81, tone.Confidence);
+        Assert.Equal(2.4, urgency.Score);
+
+        // The very same objects the untyped views hand out; Get is a lookup, not a copy.
+        Assert.Same(response.Answers["tone"], tone);
+        Assert.Same(response.Choices["tone"], tone);
+        Assert.Same(response.Nouls["billing"], billing);
+        Assert.Same(response.Scores["urgency"], urgency);
+    }
+
+    [Fact]
+    public async Task GetReportsAMissingNameOnItsOwn()
+    {
+        var response = await Respond();
+
+        Assert.Equal(
+            """No answer named "sentiment" in the response.""",
+            Assert.Throws<TypeSafeException>(() => response.Get(Question.Named.Choice("sentiment", "Sentiment?", "good", "bad"))).Message);
+        Assert.False(response.TryGet(Question.Named.Choice("sentiment", "Sentiment?", "good", "bad"), out var absent));
+        Assert.Null(absent);
+    }
+
+    [Fact]
+    public void AMismatchNamesBothTheActualAndTheRequestedType()
+    {
+        var response = new SystemOneResponse("m", new Usage(), new Dictionary<string, Answer>
+        {
+            ["tone"] = new NoulAnswer(0.5),
+            ["billing"] = new ChoiceAnswer("calm", 0.5, new Dictionary<string, double> { ["calm"] = 1.0 }),
+        });
+
+        Assert.Equal(
+            """Answer "tone" is a NoulAnswer, not a ChoiceAnswer.""",
+            Assert.Throws<TypeSafeException>(() => response.Get(Tone)).Message);
+        Assert.Equal(
+            """Answer "billing" is a ChoiceAnswer, not a NoulAnswer.""",
+            Assert.Throws<TypeSafeException>(() => response.Get(Billing)).Message);
+        Assert.Equal(
+            """Answer "tone" is a NoulAnswer, not a ScoreAnswer.""",
+            Assert.Throws<TypeSafeException>(() => response.Get(Question.Named.Score("tone", "How urgent?", ["can wait"]))).Message);
+
+        Assert.False(response.TryGet(Tone, out var mistyped));
+        Assert.Null(mistyped);
+    }
+
+    /// <summary>
+    /// An answer whose type this SDK version does not model is a bare <see cref="Answer"/>, so there is no
+    /// C# type to name: the message reports the <c>type</c> it arrived with instead.
+    /// </summary>
+    [Fact]
+    public async Task GetReportsTheUnrecognizedWireTypeOfABareAnswer()
+    {
+        var response = await Respond("""{"model":"m","usage":{},"answers":{"tone":{"type":"rank","order":["a","b"]}}}""");
+
+        Assert.Equal(typeof(Answer), response.Answers["tone"].GetType());
+        Assert.Equal(
+            """Answer "tone" has the unrecognized type "rank", not a ChoiceAnswer.""",
+            Assert.Throws<TypeSafeException>(() => response.Get(Tone)).Message);
+        Assert.False(response.TryGet(Tone, out var unmodelled));
+        Assert.Null(unmodelled);
+    }
+
+    [Fact]
+    public async Task TryGetIsTrueForAHitAndFalseForEitherFailure()
+    {
+        var response = await Respond();
+
+        Assert.True(response.TryGet(Tone, out var tone));
+        Assert.Equal("frustrated", Assert.IsType<ChoiceAnswer>(tone).Choice);
+        Assert.True(response.TryGet(Billing, out var billing));
+        Assert.Equal(0.93, Assert.IsType<NoulAnswer>(billing).Noul);
+        Assert.True(response.TryGet(Urgency, out var urgency));
+        Assert.Equal(2.4, Assert.IsType<ScoreAnswer>(urgency).Score);
+
+        // Wrong name, and the right name with the wrong type: false either way, never an exception.
+        Assert.False(response.TryGet(Question.Named.Noul("nope", "?"), out var absent));
+        Assert.Null(absent);
+        Assert.False(response.TryGet(Question.Named.Choice("billing", "Tone?", "calm"), out var mistyped));
+        Assert.Null(mistyped);
+    }
+
+    [Fact]
+    public void ANullQuestionIsRejected()
+    {
+        var response = new SystemOneResponse("m", new Usage(), new Dictionary<string, Answer>());
+        Assert.Throws<ArgumentNullException>(() => response.Get<NoulAnswer>(null!));
+        Assert.Throws<ArgumentNullException>(() => response.TryGet<NoulAnswer>(null!, out _));
+    }
+
+    /// <summary>The typed views the rest of the SDK exposes are untouched by the named lookup.</summary>
+    [Fact]
+    public async Task TheUntypedAndPerTypeViewsStayAvailable()
+    {
+        var response = await Respond();
+
+        Assert.Equal(new[] { "billing", "tone", "urgency" }, response.Answers.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Single(response.Nouls);
+        Assert.Single(response.Choices);
+        Assert.Single(response.Scores);
+        Assert.Equal("jev-latest", response.Model);
+    }
+}

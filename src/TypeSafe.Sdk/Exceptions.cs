@@ -231,9 +231,19 @@ public class TypeSafeApiResponseValidationException : TypeSafeApiException
 /// <summary>A request failed without an HTTP response (DNS, TLS, connection closed, interrupted body, etc.).</summary>
 public class TypeSafeApiConnectionException : TypeSafeException
 {
-    /// <summary>Create a connection exception.</summary>
-    public TypeSafeApiConnectionException(string message = "Connection error.", Exception? innerException = null)
-        : base(message, innerException) { }
+    /// <summary>Create a connection exception, optionally naming the transport failure that caused it.</summary>
+    public TypeSafeApiConnectionException(string message = "Connection error.", Exception? innerException = null, HttpRequestError? error = null)
+        : base(message, innerException)
+    {
+        Error = error;
+    }
+
+    /// <summary>
+    /// The transport failure reported by the inner <see cref="HttpRequestException"/>, such as
+    /// <see cref="HttpRequestError.NameResolutionError"/>, or <c>null</c> when the failure came from
+    /// another source (an <see cref="IOException"/> reading the body, or a timeout).
+    /// </summary>
+    public HttpRequestError? Error { get; }
 }
 
 /// <summary>The full response did not arrive within the per-attempt timeout. A kind of <see cref="TypeSafeApiConnectionException"/>.</summary>

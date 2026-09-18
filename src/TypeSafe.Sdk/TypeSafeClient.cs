@@ -20,6 +20,39 @@ public sealed class SystemOneRequest
         Questions = questions ?? throw new ArgumentNullException(nameof(questions));
     }
 
+    /// <summary>Create a request from questions that carry their own names, as returned by <see cref="Question.Named"/>.</summary>
+    /// <param name="state">
+    /// Text, a JSON object, or an array to evaluate: a <see cref="string"/>, <see cref="JsonObject"/>, or
+    /// <see cref="JsonArray"/> converts implicitly, and the default <see cref="Content"/> sends no state.
+    /// Pass any other object through <see cref="Content.From(object?)"/>.
+    /// </param>
+    /// <param name="questions">
+    /// Nonempty named questions. Each <see cref="INamedQuestion.Name"/> becomes the key its answer is read
+    /// with, in the order given; the names must be distinct.
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="questions"/> is <c>null</c>.</exception>
+    /// <exception cref="TypeSafeException">A name is used more than once, or an entry is <c>null</c>.</exception>
+    public SystemOneRequest(Content state, IEnumerable<INamedQuestion> questions)
+        : this(state, Keyed(questions))
+    {
+    }
+
+    /// <summary>Key named questions by their names, in order, rejecting a name that is used twice.</summary>
+    private static List<KeyValuePair<string, Question>> Keyed(IEnumerable<INamedQuestion> questions)
+    {
+        ArgumentNullException.ThrowIfNull(questions);
+        var keyed = new List<KeyValuePair<string, Question>>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var named in questions)
+        {
+            if (named is null) throw new TypeSafeException("A named question must not be null.");
+            if (!names.Add(named.Name))
+                throw new TypeSafeException($"Question name \"{named.Name}\" is used more than once.");
+            keyed.Add(new KeyValuePair<string, Question>(named.Name, named.Question));
+        }
+        return keyed;
+    }
+
     /// <summary>Text, a JSON object, or an array to evaluate. See <see href="https://docs.typesafe.ai/concepts/state">state</see>.</summary>
     public Content State { get; }
 
@@ -50,6 +83,17 @@ public interface ITypeSafeClient : IDisposable
         RequestOptions? options = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Answer questions that carry their own names: <c>SystemOneAsync(state, [billing, tone])</c>.</summary>
+    Task<SystemOneResponse> SystemOneAsync(Content state, params ReadOnlySpan<INamedQuestion> questions);
+
+    /// <summary>Answer questions that carry their own names, with a model, options, or cancellation.</summary>
+    Task<SystemOneResponse> SystemOneAsync(
+        Content state,
+        ReadOnlySpan<INamedQuestion> questions,
+        string? model = null,
+        RequestOptions? options = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Answer named questions about text or structured state.</summary>
     Task<SystemOneResponse> SystemOneAsync(
         SystemOneRequest request,
@@ -72,7 +116,7 @@ public interface IModelsResource
 /// using var client = new TypeSafeClient();
 /// var response = await client.SystemOneAsync(
 ///     state: Content.From(new { document = "I was charged twice. Please fix this ASAP." }),
-///     questions: new Questions
+///     questions: new Dictionary&lt;string, Question&gt;
 ///     {
 ///         ["category"] = Question.Choice("What is this ticket about?", "billing", "technical", "other"),
 ///     });
@@ -184,6 +228,58 @@ public sealed class TypeSafeClient : ITypeSafeClient
         CancellationToken cancellationToken = default)
     {
         return SystemOneAsync(new SystemOneRequest(state, questions) { Model = model }, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Answer questions that carry their own names, as returned by the builders on <see cref="Question.Named"/>:
+    /// <c>await client.SystemOneAsync(state, [billing, tone])</c>. The names key the answers exactly as the
+    /// dictionary overload's keys do.
+    /// </summary>
+    /// <param name="state">
+    /// Text, a JSON object, or an array to evaluate: a <see cref="string"/>, <see cref="JsonObject"/>, or
+    /// <see cref="JsonArray"/> converts implicitly, and the default <see cref="Content"/> sends no state.
+    /// </param>
+    /// <param name="questions">Nonempty named questions with distinct names.</param>
+    /// <returns>Answers keyed by question name, with model and token usage details.</returns>
+    /// <exception cref="TypeSafeException">Questions are empty, a name repeats, or a score question has no criteria.</exception>
+    /// <exception cref="TypeSafeApiException">The server returns an unsuccessful HTTP response after any retries.</exception>
+    /// <exception cref="TypeSafeApiConnectionException">The request cannot connect or times out after any retries.</exception>
+    public Task<SystemOneResponse> SystemOneAsync(Content state, params ReadOnlySpan<INamedQuestion> questions)
+    {
+        return SystemOneAsync(state, questions, model: null);
+    }
+
+    /// <summary>
+    /// Answer questions that carry their own names, with a model, options, or cancellation. Not declared
+    /// <c>params</c>: optional parameters cannot follow a parameter span, and a collection expression
+    /// binds to the span either way — <c>await client.SystemOneAsync(state, [billing, tone], model: "...")</c>.
+    /// </summary>
+    /// <param name="state">
+    /// Text, a JSON object, or an array to evaluate: a <see cref="string"/>, <see cref="JsonObject"/>, or
+    /// <see cref="JsonArray"/> converts implicitly, and the default <see cref="Content"/> sends no state.
+    /// </param>
+    /// <param name="questions">Nonempty named questions with distinct names.</param>
+    /// <param name="model">Model override; <c>null</c> inherits <see cref="DefaultModel"/>.</param>
+    /// <param name="options">Per-call timeout, retry, and header overrides.</param>
+    /// <param name="cancellationToken">Cancels the request and any pending retries.</param>
+    /// <returns>Answers keyed by question name, with model and token usage details.</returns>
+    /// <exception cref="TypeSafeException">Questions are empty, a name repeats, or a score question has no criteria.</exception>
+    /// <exception cref="TypeSafeApiException">The server returns an unsuccessful HTTP response after any retries.</exception>
+    /// <exception cref="TypeSafeApiConnectionException">The request cannot connect or times out after any retries.</exception>
+    /// <exception cref="OperationCanceledException">The caller cancels the request.</exception>
+    /// <remarks>
+    /// The method is deliberately not <c>async</c>: an async method cannot take a byref-like parameter, so the
+    /// span is copied before the request is handed to the shared overload.
+    /// </remarks>
+    public Task<SystemOneResponse> SystemOneAsync(
+        Content state,
+        ReadOnlySpan<INamedQuestion> questions,
+        string? model = null,
+        RequestOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new SystemOneRequest(state, questions.ToArray()) { Model = model };
+        return SystemOneAsync(request, options, cancellationToken);
     }
 
     /// <inheritdoc cref="SystemOneAsync(Content, IEnumerable{KeyValuePair{string, Question}}, string?, RequestOptions?, CancellationToken)"/>

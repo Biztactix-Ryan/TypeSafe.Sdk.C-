@@ -103,7 +103,7 @@ public class RequestTests
         var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
         using var client = Clients.Create(handler, o => o.DefaultModel = "wire-model");
 
-        await client.SystemOneAsync("x", new Questions
+        await client.SystemOneAsync("x", new Dictionary<string, Question>
         {
             ["tone"] = Question.FromJson(new JsonObject
             {
@@ -180,7 +180,7 @@ public class RequestTests
         var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
         using var client = Clients.Create(handler);
 
-        var error = await Assert.ThrowsAsync<TypeSafeException>(() => client.SystemOneAsync("x", new Questions()));
+        var error = await Assert.ThrowsAsync<TypeSafeException>(() => client.SystemOneAsync("x", new Dictionary<string, Question>()));
 
         Assert.Equal("At least one question is required.", error.Message);
         Assert.Empty(handler.Requests);
@@ -196,5 +196,87 @@ public class RequestTests
 
         Assert.Equal(8, handler.Requests.Count);
         Assert.All(responses, r => Assert.Equal(0.93, r.Nouls["billing"].Noul));
+    }
+
+    /// <summary>The named questions of <see cref="Clients.SampleQuestions"/>, in the same order.</summary>
+    private static INamedQuestion[] SampleNamed() =>
+    [
+        Question.Named.Noul("billing", "Is this about billing?"),
+        Question.Named.Choice("tone", "What is the tone?", "calm", "frustrated", "angry"),
+        Question.Named.Score("urgency", "How urgent?", "can wait", "this week", "today", "right now"),
+    ];
+
+    [Fact]
+    public async Task NamedQuestionsSendExactlyTheBodyTheDictionaryFormSends()
+    {
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler, o => o.DefaultModel = "wire-model");
+        var named = SampleNamed();
+
+        // A collection expression of Named<T> values of three different answer types, then the same
+        // questions keyed by hand, then the interface surface: all three must leave identical bytes.
+        await client.SystemOneAsync("x", [named[0], named[1], named[2]]);
+        await client.SystemOneAsync("x", Clients.SampleQuestions());
+        ITypeSafeClient api = client;
+        await api.SystemOneAsync("x", named);
+        // And the params form, one question per argument.
+        await client.SystemOneAsync("x", named[0], named[1], named[2]);
+
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(handler.Requests[1].Body, handler.Requests[0].Body);
+        Assert.Equal(handler.Requests[1].Body, handler.Requests[2].Body);
+        Assert.Equal(handler.Requests[1].Body, handler.Requests[3].Body);
+        var questions = Assert.IsType<JsonObject>(handler.Requests[0].Json!["questions"]);
+        Assert.Equal(new[] { "billing", "tone", "urgency" }, questions.Select(q => q.Key));
+    }
+
+    [Fact]
+    public async Task NamedQuestionsCarryModelOptionsAndCancellation()
+    {
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler, o => o.DefaultModel = "client-model");
+        var billing = Question.Named.Noul("billing", "Is this about billing?");
+        var tone = Question.Named.Choice("tone", "What is the tone?", "calm", "frustrated", "angry");
+
+        await client.SystemOneAsync("x", [billing, tone]);
+        await client.SystemOneAsync("x", [billing, tone], model: "call-model", options: new RequestOptions
+        {
+            Headers = new Dictionary<string, string> { ["X-Team"] = "per-call" },
+        });
+
+        Assert.Equal("client-model", (string?)handler.Requests[0].Json!["model"]);
+        Assert.Equal("call-model", (string?)handler.Requests[1].Json!["model"]);
+        Assert.Equal("per-call", handler.Requests[1].Header("X-Team"));
+
+        var token = new CancellationToken(canceled: true);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.SystemOneAsync("x", [billing, tone], cancellationToken: token));
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ANameUsedTwiceIsRejectedBeforeSending()
+    {
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler);
+        var tone = Question.Named.Choice("tone", "What is the tone?", "calm", "angry");
+        var alsoTone = Question.Named.Noul("tone", "Is it calm?");
+
+        var error = await Assert.ThrowsAsync<TypeSafeException>(() => client.SystemOneAsync("x", [tone, alsoTone]));
+
+        Assert.Equal("Question name \"tone\" is used more than once.", error.Message);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task NoNamedQuestionsHitsTheSameEmptyValidation()
+    {
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler);
+
+        var error = await Assert.ThrowsAsync<TypeSafeException>(() => client.SystemOneAsync("x", Array.Empty<INamedQuestion>()));
+
+        Assert.Equal("At least one question is required.", error.Message);
+        Assert.Empty(handler.Requests);
     }
 }

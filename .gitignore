@@ -9,3 +9,6 @@ TestResults/
 *.snupkg
 artifacts/
 .project/
+
+# Verify snapshot output: *.received.* is the failing run's actual value, never committed.
+*.received.*
