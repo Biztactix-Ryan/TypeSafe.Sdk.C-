@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>TypeSafe</RootNamespace>
+    <AssemblyName>TypeSafe.Sdk</AssemblyName>
+    <PackageId>TypeSafe.Sdk</PackageId>
+    <Version>0.6.0</Version>
+    <Authors>Biztactix-Ryan</Authors>
+    <Description>Unofficial C# SDK for the TypeSafe AI API, ported from the official Python and JavaScript SDKs.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Biztactix-Ryan/TypeSafe.Sdk.C-</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Biztactix-Ryan/TypeSafe.Sdk.C-.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>typesafe;sdk;api;ai</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="TypeSafe.Sdk.Tests" />
+  </ItemGroup>
+
+</Project>

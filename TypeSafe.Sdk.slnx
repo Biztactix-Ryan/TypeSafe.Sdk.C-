@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="examples/TypeSafe.Sdk.Demo/TypeSafe.Sdk.Demo.csproj" />
+  <Project Path="src/TypeSafe.Sdk/TypeSafe.Sdk.csproj" />
+  <Project Path="tests/TypeSafe.Sdk.Tests/TypeSafe.Sdk.Tests.csproj" />
+</Solution>
