@@ -25,7 +25,7 @@ public static class TypeSafeConstants
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>The SDK version reported in the <c>User-Agent</c> and <c>X-TypeSafe-SDK</c> headers.</summary>
-    public const string Version = "0.6.0";
+    public const string Version = "0.7.0";
 
     /// <summary>Response header carrying the server-assigned request ID.</summary>
     public const string RequestIdHeader = "x-typesafe-request-id";

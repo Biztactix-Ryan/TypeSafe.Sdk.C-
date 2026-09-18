@@ -118,6 +118,37 @@ public class PublicSurfaceTests
         Assert.Equal(expected, annotated);
     }
 
+    /// <summary>
+    /// The <c>Questions : Dictionary&lt;string, Question&gt;</c> collection type is gone: callers pass any
+    /// <c>IEnumerable&lt;KeyValuePair&lt;string, Question&gt;&gt;</c>, so a plain dictionary works and the SDK
+    /// no longer owns a collection type of its own.
+    /// </summary>
+    [Fact]
+    public void TheQuestionsDictionaryTypeIsGone()
+    {
+        // The scan sees internals (InternalsVisibleTo), so a missing type really means deleted, not hidden.
+        var types = typeof(Question).Assembly.GetTypes();
+        Assert.Contains(typeof(Question), types);
+
+        var survivors = types.Where(type => type.Name == "Questions").Select(Describe).ToArray();
+        Assert.Empty(survivors);
+
+        // The overload that used to take Questions now takes the interface any dictionary satisfies.
+        var overloads = typeof(ITypeSafeClient)
+            .GetMethods()
+            .Where(method => method.Name == nameof(ITypeSafeClient.SystemOneAsync))
+            .ToArray();
+        // One state-and-questions overload takes a plain sequence; the named-question ones take a span.
+        var keyed = Assert.Single(
+            overloads,
+            method => method.GetParameters() is { Length: > 3 } parameters
+                && parameters[1].ParameterType is { IsGenericType: true } questions
+                && questions.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+        Assert.Equal(
+            typeof(IEnumerable<KeyValuePair<string, Question>>),
+            keyed.GetParameters()[1].ParameterType);
+    }
+
     /// <summary>Whether a member opts out of trim or AOT safety analysis for its callers.</summary>
     private static bool RequiresUnsafeCode(MemberInfo member) =>
         member.IsDefined(typeof(RequiresUnreferencedCodeAttribute), inherit: false)

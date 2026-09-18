@@ -12,6 +12,7 @@ C# on .NET 10 (library, tests and demo all target `net10.0`; requires the .NET 1
 | Test | `dotnet test` |
 | Pack | `dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release -o artifacts` |
 | Demo | `TYPESAFE_API_KEY=... dotnet run --project examples/TypeSafe.Sdk.Demo` |
+| Version check | `scripts/check-version.sh` (optionally `scripts/check-version.sh 0.7.0`) |
 
 ## Layout
 - `src/TypeSafe.Sdk/` — the library. `TypeSafeClient.cs`, `Questions.cs`, `Responses.cs`, `Exceptions.cs`, `RetryPolicy.cs`; `Internal/Transport.cs` is the retry/timeout loop.

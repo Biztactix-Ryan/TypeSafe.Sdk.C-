@@ -1,5 +1,7 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -29,6 +31,40 @@ public abstract class ApiResponse
         Headers = headers;
         RequestId = HeaderSnapshot.RequestId(headers);
     }
+
+    /// <summary>
+    /// Report a field of this response the SDK could not make sense of, exactly as the transport reports
+    /// a body it could not decode: the same status code, headers and request ID, the endpoint recovered
+    /// from the originating request, and the body parsed leniently (a string node when it was not JSON).
+    /// </summary>
+    /// <param name="fieldPath">Dotted path to the offending field, such as <c>answers.tone.choice</c>.</param>
+    internal TypeSafeApiResponseValidationException Invalid(string fieldPath) =>
+        new(StatusCode, ReadBody(), Headers, fieldPath, ReadEndpoint());
+
+    /// <summary>
+    /// The response body as a <see cref="JsonNode"/>, or <c>null</c> when this response was not created
+    /// from an HTTP response or its content can no longer be read (streamed away, or disposed).
+    /// </summary>
+    private JsonNode? ReadBody()
+    {
+        if (RawHttpResponse?.Content is not { } content) return null;
+        try
+        {
+            var stream = content.ReadAsStream();
+            if (stream.CanSeek) stream.Position = 0;
+            // The stream is left open: it belongs to RawHttpResponse, which the caller still owns.
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            return JsonContent.ParseLenient(reader.ReadToEnd());
+        }
+        catch (Exception error) when (error is IOException or ObjectDisposedException or NotSupportedException or InvalidOperationException or HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The method and URL of the request this response answered, or <c>null</c> when unknown.</summary>
+    private string? ReadEndpoint() =>
+        RawHttpResponse?.RequestMessage is { RequestUri: { } url } request ? $"{request.Method} {url}" : null;
 }
 
 /// <summary>
@@ -116,6 +152,31 @@ public sealed record ChoiceAnswer(
     public string Label => Choice;
 }
 
+/// <summary>
+/// A selected enum member and its probabilities: the answer to a <see cref="ChoiceQuestion{TEnum}"/>, so
+/// the choice is a <typeparamref name="TEnum"/> rather than a label the caller has to re-spell.
+/// </summary>
+/// <typeparam name="TEnum">The enum whose members are the available labels.</typeparam>
+/// <param name="Choice">The selected member.</param>
+/// <param name="Confidence">Reported confidence in the selected member.</param>
+/// <param name="Probabilities">Probabilities keyed by member.</param>
+/// <remarks>
+/// Built on the response side from the wire <see cref="ChoiceAnswer"/> when the answer is read through a
+/// <see cref="Named{TAnswer}"/> of this type, so it is deliberately not registered with the
+/// source-generated context: nothing ever serializes or deserializes it. Every label the server sent must
+/// be one <typeparamref name="TEnum"/> declares; one that is not is reported as invalid response data.
+/// </remarks>
+public sealed record ChoiceAnswer<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] TEnum>(
+    TEnum Choice,
+    double Confidence,
+    IReadOnlyDictionary<TEnum, double> Probabilities) : Answer
+    where TEnum : struct, Enum
+{
+    /// <inheritdoc/>
+    [JsonIgnore]
+    public override string Type => "choice";
+}
+
 /// <summary>An expected score with its rubric and probabilities. See the <see href="https://docs.typesafe.ai/primitives/score">score primitive</see>.</summary>
 /// <param name="Score">Expected score, which may fall between the integer rubric levels.</param>
 /// <param name="Confidence">Reported confidence in the score.</param>
@@ -130,6 +191,44 @@ public sealed record ScoreAnswer(
     /// <inheritdoc/>
     [JsonIgnore]
     public override string Type => "score";
+}
+
+/// <summary>
+/// An expected score with its rubric and probabilities keyed by <typeparamref name="TEnum"/>: the answer
+/// to a <see cref="ScoreQuestion{TEnum}"/>, so every rubric level is a named member rather than an integer
+/// the caller has to interpret, and <see cref="Nearest"/> names the level the score lands on.
+/// </summary>
+/// <typeparam name="TEnum">The enum whose members are the rubric levels, valued <c>0</c> to <c>N-1</c>.</typeparam>
+/// <param name="Score">Expected score, which may fall between the integer rubric levels.</param>
+/// <param name="Confidence">Reported confidence in the score.</param>
+/// <param name="Legend">Rubric descriptions keyed by level, as text, a JSON object, or an array.</param>
+/// <param name="Probabilities">Probabilities keyed by level.</param>
+/// <remarks>
+/// Built on the response side from the wire <see cref="ScoreAnswer"/> when the answer is read through a
+/// <see cref="Named{TAnswer}"/> of this type, so it is deliberately not registered with the
+/// source-generated context: nothing ever serializes or deserializes it. Every score the server keyed the
+/// legend or the probabilities by must be a level <typeparamref name="TEnum"/> declares; one that is not
+/// is reported as invalid response data.
+/// </remarks>
+public sealed record ScoreAnswer<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] TEnum>(
+    double Score,
+    double Confidence,
+    IReadOnlyDictionary<TEnum, JsonNode?> Legend,
+    IReadOnlyDictionary<TEnum, double> Probabilities) : Answer
+    where TEnum : struct, Enum
+{
+    /// <inheritdoc/>
+    [JsonIgnore]
+    public override string Type => "score";
+
+    /// <summary>
+    /// The rubric level <see cref="Score"/> lands on: the score rounded half away from zero — <c>1.4</c> is
+    /// level <c>1</c> and <c>1.5</c> is level <c>2</c> — and clamped to the rubric, so a score above the
+    /// top level is the top level and a negative one is the bottom. Computed, never sent or received on
+    /// the wire.
+    /// </summary>
+    [JsonIgnore]
+    public TEnum Nearest => Rubric.Nearest<TEnum>(Score);
 }
 
 /// <summary>Token counts for a request, when reported by the API.</summary>
@@ -209,6 +308,87 @@ public sealed class SystemOneResponse : ApiResponse
         }
         return filtered;
     }
+
+    /// <summary>
+    /// The answer to a named question, typed by the question: <c>response.Get(tone)</c> is a
+    /// <see cref="ChoiceAnswer"/> when <c>tone</c> is a <see cref="Named{TAnswer}"/> of
+    /// <see cref="ChoiceAnswer"/>, so no cast and no second spelling of the name is needed.
+    /// </summary>
+    /// <typeparam name="TAnswer">The answer type the question declares.</typeparam>
+    /// <param name="question">The named question, as built by the <see cref="Question.Named"/> builders.</param>
+    /// <returns>The answer stored under <see cref="Named{TAnswer}.Name"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="question"/> is <c>null</c>.</exception>
+    /// <exception cref="TypeSafeException">
+    /// The response carries no answer under that name, or carries one of another type — including an
+    /// answer whose type this SDK version does not model, which is reported by its wire type.
+    /// </exception>
+    /// <exception cref="TypeSafeApiResponseValidationException">
+    /// The answer has the type the question declares but carries a value the question cannot map — a
+    /// label an enum-typed choice question does not declare — named by
+    /// <see cref="TypeSafeApiResponseValidationException.FieldPath"/>, such as <c>answers.tone.choice</c>.
+    /// </exception>
+    public TAnswer Get<TAnswer>(Named<TAnswer> question) where TAnswer : Answer
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        var name = question.Name;
+        if (!Answers.TryGetValue(name, out var answer))
+            throw new TypeSafeException($"No answer named \"{name}\" in the response.");
+        if (!TryConvert(question, answer, out var converted, out var invalidField))
+        {
+            throw invalidField is null
+                ? new TypeSafeException(Mismatch<TAnswer>(name, answer))
+                : Invalid($"answers.{name}.{invalidField}");
+        }
+        return converted;
+    }
+
+    /// <summary>
+    /// The non-throwing form of <see cref="Get{TAnswer}(Named{TAnswer})"/>: <c>false</c> when the response
+    /// carries no answer under the question's name, when it carries one of another type, and when it
+    /// carries one the question cannot map, which <see cref="Get{TAnswer}(Named{TAnswer})"/> reports as
+    /// invalid response data.
+    /// </summary>
+    /// <typeparam name="TAnswer">The answer type the question declares.</typeparam>
+    /// <param name="question">The named question, as built by the <see cref="Question.Named"/> builders.</param>
+    /// <param name="answer">The typed answer when this returns <c>true</c>; otherwise <c>null</c>.</param>
+    /// <returns><c>true</c> when an answer of the declared type is present under the question's name.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="question"/> is <c>null</c>.</exception>
+    public bool TryGet<TAnswer>(Named<TAnswer> question, [NotNullWhen(true)] out TAnswer? answer)
+        where TAnswer : Answer
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        answer = null;
+        return Answers.TryGetValue(question.Name, out var found) && TryConvert(question, found, out answer, out _);
+    }
+
+    /// <summary>
+    /// The single place an <see cref="Answer"/> from <see cref="Answers"/> becomes the answer type a
+    /// question declares, so <see cref="Get{TAnswer}(Named{TAnswer})"/> and
+    /// <see cref="TryGet{TAnswer}(Named{TAnswer}, out TAnswer)"/> agree on what a hit is. The question
+    /// itself does the converting — it is the only object that still knows the type argument of an
+    /// enum-typed question, so the mapping needs no reflection — and for every plain question that is
+    /// still the runtime type check.
+    /// </summary>
+    /// <param name="question">The named question the answer was looked up with.</param>
+    /// <param name="answer">The answer decoded from the response.</param>
+    /// <param name="converted">The typed answer when this returns <c>true</c>; otherwise <c>null</c>.</param>
+    /// <param name="invalidField">
+    /// The field path within the answer that could not be mapped, or <c>null</c> when the answer is simply
+    /// of another type: a failure with a field path is invalid response data, one without is a mismatch.
+    /// </param>
+    private static bool TryConvert<TAnswer>(
+        Named<TAnswer> question, Answer answer, [NotNullWhen(true)] out TAnswer? converted, out string? invalidField)
+        where TAnswer : Answer =>
+        question.Question.TryConvertAnswer(answer, out converted, out invalidField);
+
+    /// <summary>
+    /// The message for an answer present under <paramref name="name"/> but of another type. A bare
+    /// <see cref="Answer"/> has no C# type worth naming, so it is reported by the <c>type</c> it arrived with.
+    /// </summary>
+    private static string Mismatch<TAnswer>(string name, Answer answer) where TAnswer : Answer =>
+        answer.GetType() == typeof(Answer)
+            ? $"Answer \"{name}\" has the unrecognized type \"{UnmodelledType(answer)}\", not a {typeof(TAnswer).Name}."
+            : $"Answer \"{name}\" is a {answer.GetType().Name}, not a {typeof(TAnswer).Name}.";
 
     /// <summary>
     /// Project a decoded <c>POST /v1/systemone</c> body, warning about answer types this SDK does not model.

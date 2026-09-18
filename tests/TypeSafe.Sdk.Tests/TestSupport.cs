@@ -44,7 +44,10 @@ internal sealed class StubHandler : HttpMessageHandler
         var recorded = new RecordedRequest(request.Method, request.RequestUri!, headers, body);
         var attempt = Requests.Count;
         Requests.Add(recorded);
-        return await _respond(recorded, attempt, cancellationToken);
+        var response = await _respond(recorded, attempt, cancellationToken);
+        // Real handlers hand the request back on the response; response-side failures read the endpoint off it.
+        response.RequestMessage ??= request;
+        return response;
     }
 }
 
@@ -153,7 +156,7 @@ internal static class Clients
         });
     }
 
-    public static Questions SampleQuestions() => new()
+    public static Dictionary<string, Question> SampleQuestions() => new()
     {
         ["billing"] = Question.Noul("Is this about billing?"),
         ["tone"] = Question.Choice("What is the tone?", "calm", "frustrated", "angry"),

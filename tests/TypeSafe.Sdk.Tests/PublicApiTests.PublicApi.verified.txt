@@ -1,0 +1,404 @@
+﻿namespace TypeSafe
+{
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.ChoiceAnswer), "choice")]
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.NoulAnswer), "noul")]
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.ScoreAnswer), "score")]
+    [System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName="type", UnknownDerivedTypeHandling=System.Text.Json.Serialization.JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
+    public class Answer : System.IEquatable<TypeSafe.Answer>
+    {
+        public Answer() { }
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? AdditionalProperties { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public virtual string Type { get; }
+    }
+    public abstract class ApiResponse
+    {
+        protected ApiResponse() { }
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> Headers { get; }
+        public System.Net.Http.HttpResponseMessage? RawHttpResponse { get; }
+        public string? RequestId { get; }
+        public System.Net.HttpStatusCode StatusCode { get; }
+    }
+    public sealed class ChoiceAnswer : TypeSafe.Answer, System.IEquatable<TypeSafe.ChoiceAnswer>
+    {
+        public ChoiceAnswer(string Choice, double Confidence, System.Collections.Generic.IReadOnlyDictionary<string, double> Probabilities) { }
+        [System.Text.Json.Serialization.JsonPropertyName("choice")]
+        public string Choice { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("confidence")]
+        public double Confidence { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string Label { get; }
+        [System.Text.Json.Serialization.JsonPropertyName("probabilities")]
+        public System.Collections.Generic.IReadOnlyDictionary<string, double> Probabilities { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ChoiceAnswer<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum> : TypeSafe.Answer, System.IEquatable<TypeSafe.ChoiceAnswer<TEnum>>
+        where TEnum :  struct, System.Enum
+    {
+        public ChoiceAnswer(TEnum Choice, double Confidence, System.Collections.Generic.IReadOnlyDictionary<TEnum, double> Probabilities) { }
+        public TEnum Choice { get; init; }
+        public double Confidence { get; init; }
+        public System.Collections.Generic.IReadOnlyDictionary<TEnum, double> Probabilities { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ChoiceQuestion : TypeSafe.Question<TypeSafe.ChoiceAnswer>, System.IEquatable<TypeSafe.ChoiceQuestion>
+    {
+        public ChoiceQuestion(System.Text.Json.Nodes.JsonNode? Instructions, System.Collections.Generic.IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonNode?> Criteria) { }
+        [System.Text.Json.Serialization.JsonPropertyName("criteria")]
+        [System.Text.Json.Serialization.JsonPropertyOrder(2)]
+        public System.Collections.Generic.IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonNode?> Criteria { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ChoiceQuestion<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum> : TypeSafe.Question<TypeSafe.ChoiceAnswer<TEnum>>, System.IEquatable<TypeSafe.ChoiceQuestion<TEnum>>
+        where TEnum :  struct, System.Enum
+    {
+        public ChoiceQuestion(TypeSafe.Content instructions = default) { }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.Collections.Generic.IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonNode?> Criteria { get; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public readonly struct Content : System.IEquatable<TypeSafe.Content>
+    {
+        public Content(System.Text.Json.Nodes.JsonNode? node) { }
+        public System.Text.Json.Nodes.JsonNode? Node { get; }
+        public static TypeSafe.Content Null { get; }
+        [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("Reflection-based serialization is not trim or AOT safe; use Content.From<T>(T, Js" +
+            "onTypeInfo<T>) with a JsonSerializerContext instead.")]
+        [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("Reflection-based serialization is not trim or AOT safe; use Content.From<T>(T, Js" +
+            "onTypeInfo<T>) with a JsonSerializerContext instead.")]
+        public static TypeSafe.Content From(object? value) { }
+        public static TypeSafe.Content From<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) { }
+        public static TypeSafe.Content op_Implicit(System.Text.Json.Nodes.JsonArray? value) { }
+        public static TypeSafe.Content op_Implicit(System.Text.Json.Nodes.JsonObject? value) { }
+        public static TypeSafe.Content op_Implicit(string? text) { }
+    }
+    public interface IModelsResource
+    {
+        System.Threading.Tasks.Task<TypeSafe.ListModelsResponse> ListAsync(TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
+    }
+    public interface INamedQuestion
+    {
+        string Name { get; }
+        TypeSafe.Question Question { get; }
+    }
+    public interface ITypeSafeClient : System.IDisposable
+    {
+        TypeSafe.IModelsResource Models { get; }
+        System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<TypeSafe.INamedQuestion> questions);
+        System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.SystemOneRequest request, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Question>> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.ReadOnlySpan<TypeSafe.INamedQuestion> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
+    }
+    public sealed class ListModelsResponse : TypeSafe.ApiResponse, System.Collections.Generic.IEnumerable<TypeSafe.ModelMetadata>, System.Collections.Generic.IReadOnlyCollection<TypeSafe.ModelMetadata>, System.Collections.Generic.IReadOnlyList<TypeSafe.ModelMetadata>, System.Collections.IEnumerable
+    {
+        public ListModelsResponse(System.Collections.Generic.IReadOnlyList<TypeSafe.ModelMetadata> models) { }
+        public int Count { get; }
+        public TypeSafe.ModelMetadata this[int index] { get; }
+        public System.Collections.Generic.IEnumerator<TypeSafe.ModelMetadata> GetEnumerator() { }
+    }
+    public sealed class ModelMetadata : System.IEquatable<TypeSafe.ModelMetadata>
+    {
+        public ModelMetadata(string Name, string Description, string ReleaseDate) { }
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        public string Description { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        public string Name { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("release_date")]
+        public string ReleaseDate { get; init; }
+    }
+    public sealed class ModelsResource : TypeSafe.IModelsResource
+    {
+        public System.Threading.Tasks.Task<TypeSafe.ListModelsResponse> ListAsync(TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class Named<TAnswer> : System.IEquatable<TypeSafe.Named<TAnswer>>, TypeSafe.INamedQuestion
+        where TAnswer : TypeSafe.Answer
+    {
+        public Named(string Name, TypeSafe.Question<TAnswer> Question) { }
+        public string Name { get; init; }
+        public TypeSafe.Question<TAnswer> Question { get; init; }
+    }
+    public sealed class NoulAnswer : TypeSafe.Answer, System.IEquatable<TypeSafe.NoulAnswer>
+    {
+        public NoulAnswer(double Noul) { }
+        [System.Text.Json.Serialization.JsonPropertyName("noul")]
+        public double Noul { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public double Probability { get; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class NoulCriteria : System.IEquatable<TypeSafe.NoulCriteria>
+    {
+        public NoulCriteria(TypeSafe.Content whenTrue = default, TypeSafe.Content whenFalse = default) { }
+        [System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        [System.Text.Json.Serialization.JsonPropertyName("false")]
+        public System.Text.Json.Nodes.JsonNode? WhenFalse { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        [System.Text.Json.Serialization.JsonPropertyName("true")]
+        public System.Text.Json.Nodes.JsonNode? WhenTrue { get; init; }
+    }
+    public sealed class NoulQuestion : TypeSafe.Question<TypeSafe.NoulAnswer>, System.IEquatable<TypeSafe.NoulQuestion>
+    {
+        public NoulQuestion(System.Text.Json.Nodes.JsonNode? Instructions = null, TypeSafe.NoulCriteria? Criteria = null) { }
+        [System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        [System.Text.Json.Serialization.JsonPropertyName("criteria")]
+        [System.Text.Json.Serialization.JsonPropertyOrder(2)]
+        public TypeSafe.NoulCriteria? Criteria { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.ChoiceQuestion), "choice")]
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.NoulQuestion), "noul")]
+    [System.Text.Json.Serialization.JsonDerivedType(typeof(TypeSafe.ScoreQuestion), "score")]
+    [System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName="type")]
+    public abstract class Question : System.IEquatable<TypeSafe.Question>
+    {
+        [System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        [System.Text.Json.Serialization.JsonPropertyName("instructions")]
+        [System.Text.Json.Serialization.JsonPropertyOrder(1)]
+        public System.Text.Json.Nodes.JsonNode? Instructions { get; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public abstract string Type { get; }
+        public static TypeSafe.ChoiceQuestion Choice(TypeSafe.Content instructions, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Content>> criteria) { }
+        public static TypeSafe.ChoiceQuestion Choice(TypeSafe.Content instructions, params string[] labels) { }
+        public static TypeSafe.RawQuestion FromJson(System.Text.Json.Nodes.JsonObject json) { }
+        public static TypeSafe.NoulQuestion Noul(TypeSafe.Content instructions = default, TypeSafe.Content whenTrue = default, TypeSafe.Content whenFalse = default) { }
+        public static TypeSafe.ScoreQuestion Score(TypeSafe.Content instructions, params TypeSafe.Content[] criteria) { }
+        public static class Named
+        {
+            public static TypeSafe.Named<TypeSafe.ChoiceAnswer> Choice(string name, TypeSafe.Content instructions, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Content>> criteria) { }
+            public static TypeSafe.Named<TypeSafe.ChoiceAnswer> Choice(string name, TypeSafe.Content instructions, params string[] labels) { }
+            public static TypeSafe.Named<TypeSafe.ChoiceAnswer<TEnum>> Choice<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum>(string name, TypeSafe.Content instructions = default)
+                where TEnum :  struct, System.Enum { }
+            public static TypeSafe.Named<TypeSafe.NoulAnswer> Noul(string name, TypeSafe.Content instructions = default, TypeSafe.Content whenTrue = default, TypeSafe.Content whenFalse = default) { }
+            public static TypeSafe.Named<TypeSafe.ScoreAnswer> Score(string name, TypeSafe.Content instructions, params TypeSafe.Content[] criteria) { }
+            public static TypeSafe.Named<TypeSafe.ScoreAnswer<TEnum>> Score<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum>(string name, TypeSafe.Content instructions = default)
+                where TEnum :  struct, System.Enum { }
+        }
+    }
+    public abstract class Question<TAnswer> : TypeSafe.Question, System.IEquatable<TypeSafe.Question<TAnswer>>
+        where TAnswer : TypeSafe.Answer { }
+    public sealed class RawQuestion : TypeSafe.Question, System.IEquatable<TypeSafe.RawQuestion>
+    {
+        public RawQuestion(System.Text.Json.Nodes.JsonObject json) { }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.Text.Json.Nodes.JsonObject Json { get; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class RequestOptions
+    {
+        public RequestOptions() { }
+        public System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, string>>? Headers { get; init; }
+        public TypeSafe.RetryPolicy? Retry { get; init; }
+        public System.TimeSpan? Timeout { get; init; }
+    }
+    public sealed class RetryPolicy : System.IEquatable<TypeSafe.RetryPolicy>
+    {
+        public static readonly System.Collections.Generic.IReadOnlySet<int> DefaultHttpStatuses;
+        public RetryPolicy() { }
+        public System.TimeSpan BackoffInitial { get; init; }
+        public double BackoffJitter { get; init; }
+        public System.TimeSpan BackoffMax { get; init; }
+        public System.Collections.Generic.IReadOnlySet<int> HttpStatuses { get; init; }
+        public int MaxRetries { get; init; }
+        public System.TimeSpan MaxRetryAfter { get; init; }
+        public bool RespectRetryAfter { get; init; }
+        public bool RetryConnectionErrors { get; init; }
+        public bool RetryTimeouts { get; init; }
+        public System.Func<System.Exception, bool>? RetryWhen { get; init; }
+        public System.TimeSpan? TotalTimeout { get; init; }
+        public static TypeSafe.RetryPolicy Default { get; }
+        public static TypeSafe.RetryPolicy None { get; }
+        public System.TimeSpan DelayFor(int attempt, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, System.Random? random = null) { }
+        public bool ShouldRetry(System.Exception error) { }
+        public TypeSafe.RetryPolicy Validate() { }
+    }
+    public sealed class ScoreAnswer : TypeSafe.Answer, System.IEquatable<TypeSafe.ScoreAnswer>
+    {
+        public ScoreAnswer(double Score, double Confidence, System.Collections.Generic.IReadOnlyDictionary<int, System.Text.Json.Nodes.JsonNode?> Legend, System.Collections.Generic.IReadOnlyDictionary<int, double> Probabilities) { }
+        [System.Text.Json.Serialization.JsonPropertyName("confidence")]
+        public double Confidence { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("legend")]
+        public System.Collections.Generic.IReadOnlyDictionary<int, System.Text.Json.Nodes.JsonNode?> Legend { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("probabilities")]
+        public System.Collections.Generic.IReadOnlyDictionary<int, double> Probabilities { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("score")]
+        public double Score { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ScoreAnswer<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum> : TypeSafe.Answer, System.IEquatable<TypeSafe.ScoreAnswer<TEnum>>
+        where TEnum :  struct, System.Enum
+    {
+        public ScoreAnswer(double Score, double Confidence, System.Collections.Generic.IReadOnlyDictionary<TEnum, System.Text.Json.Nodes.JsonNode?> Legend, System.Collections.Generic.IReadOnlyDictionary<TEnum, double> Probabilities) { }
+        public double Confidence { get; init; }
+        public System.Collections.Generic.IReadOnlyDictionary<TEnum, System.Text.Json.Nodes.JsonNode?> Legend { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public TEnum Nearest { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<TEnum, double> Probabilities { get; init; }
+        public double Score { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ScoreQuestion : TypeSafe.Question<TypeSafe.ScoreAnswer>, System.IEquatable<TypeSafe.ScoreQuestion>
+    {
+        public ScoreQuestion(System.Text.Json.Nodes.JsonNode? Instructions, System.Collections.Generic.IReadOnlyList<System.Text.Json.Nodes.JsonNode?> Criteria) { }
+        [System.Text.Json.Serialization.JsonPropertyName("criteria")]
+        [System.Text.Json.Serialization.JsonPropertyOrder(2)]
+        public System.Collections.Generic.IReadOnlyList<System.Text.Json.Nodes.JsonNode?> Criteria { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class ScoreQuestion<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum> : TypeSafe.Question<TypeSafe.ScoreAnswer<TEnum>>, System.IEquatable<TypeSafe.ScoreQuestion<TEnum>>
+        where TEnum :  struct, System.Enum
+    {
+        public ScoreQuestion(TypeSafe.Content instructions = default) { }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.Collections.Generic.IReadOnlyList<System.Text.Json.Nodes.JsonNode?> Criteria { get; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string Type { get; }
+    }
+    public sealed class SystemOneRequest
+    {
+        public SystemOneRequest(TypeSafe.Content state, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Question>> questions) { }
+        public SystemOneRequest(TypeSafe.Content state, System.Collections.Generic.IEnumerable<TypeSafe.INamedQuestion> questions) { }
+        public System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, System.Text.Json.Nodes.JsonNode?>>? ExtraBody { get; init; }
+        public string? Model { get; init; }
+        public System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Question>> Questions { get; }
+        public TypeSafe.Content State { get; }
+    }
+    public sealed class SystemOneResponse : TypeSafe.ApiResponse
+    {
+        public SystemOneResponse(string model, TypeSafe.Usage usage, System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers) { }
+        public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> Answers { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ChoiceAnswer> Choices { get; }
+        public string Model { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.NoulAnswer> Nouls { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ScoreAnswer> Scores { get; }
+        public TypeSafe.Usage Usage { get; }
+        public TAnswer Get<TAnswer>(TypeSafe.Named<TAnswer> question)
+            where TAnswer : TypeSafe.Answer { }
+        public bool TryGet<TAnswer>(TypeSafe.Named<TAnswer> question, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TAnswer? answer)
+            where TAnswer : TypeSafe.Answer { }
+    }
+    public class TypeSafeApiConnectionException : TypeSafe.TypeSafeException
+    {
+        public TypeSafeApiConnectionException(string message = "Connection error.", System.Exception? innerException = null, System.Net.Http.HttpRequestError? error = default) { }
+        public System.Net.Http.HttpRequestError? Error { get; }
+    }
+    public class TypeSafeApiException : TypeSafe.TypeSafeException
+    {
+        public TypeSafeApiException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+        public System.Text.Json.Nodes.JsonNode? Body { get; }
+        public string Detail { get; }
+        public string? Endpoint { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> Headers { get; }
+        public string? RequestId { get; }
+        public System.Net.HttpStatusCode StatusCode { get; }
+        public static TypeSafe.TypeSafeApiException FromResponse(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? endpoint = null) { }
+    }
+    public class TypeSafeApiResponseValidationException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeApiResponseValidationException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers, string fieldPath, string? endpoint = null) { }
+        public string FieldPath { get; }
+    }
+    public class TypeSafeApiTimeoutException : TypeSafe.TypeSafeApiConnectionException
+    {
+        public TypeSafeApiTimeoutException(System.TimeSpan timeout, System.Exception? innerException = null) { }
+        public System.TimeSpan Timeout { get; }
+    }
+    public class TypeSafeAuthenticationException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeAuthenticationException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public class TypeSafeBadRequestException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeBadRequestException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public sealed class TypeSafeClient : System.IDisposable, TypeSafe.ITypeSafeClient
+    {
+        public TypeSafeClient() { }
+        public TypeSafeClient(TypeSafe.TypeSafeClientOptions options) { }
+        public TypeSafeClient(string apiKey) { }
+        public string BaseUrl { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> DefaultHeaders { get; }
+        public string DefaultModel { get; }
+        public Microsoft.Extensions.Logging.LogLevel LogLevel { get; }
+        public Microsoft.Extensions.Logging.ILogger Logger { get; }
+        public TypeSafe.IModelsResource Models { get; }
+        public TypeSafe.RetryPolicy Retry { get; }
+        public System.TimeSpan Timeout { get; }
+        public void Dispose() { }
+        public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<TypeSafe.INamedQuestion> questions) { }
+        public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.SystemOneRequest request, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
+        public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Question>> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
+        public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.ReadOnlySpan<TypeSafe.INamedQuestion> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class TypeSafeClientOptions
+    {
+        public TypeSafeClientOptions() { }
+        public string? ApiKey { get; init; }
+        public string? BaseUrl { get; init; }
+        public System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, string>>? DefaultHeaders { get; init; }
+        public string? DefaultModel { get; init; }
+        public bool DisposeHttpClient { get; init; }
+        public System.Net.Http.HttpClient? HttpClient { get; init; }
+        public System.Net.Http.HttpMessageHandler? HttpMessageHandler { get; init; }
+        public Microsoft.Extensions.Logging.LogLevel? LogLevel { get; init; }
+        public Microsoft.Extensions.Logging.ILogger? Logger { get; init; }
+        public TypeSafe.RetryPolicy? Retry { get; init; }
+        public System.TimeSpan? Timeout { get; init; }
+    }
+    public static class TypeSafeConstants
+    {
+        public const string ApiKeyEnv = "TYPESAFE_API_KEY";
+        public const string BaseUrlEnv = "TYPESAFE_BASE_URL";
+        public const string DefaultBaseUrl = "https://api.typesafe.ai";
+        public const string DefaultModel = "jev-latest";
+        public const string DefaultModelEnv = "TYPESAFE_DEFAULT_MODEL";
+        public const string LogLevelEnv = "TYPESAFE_LOG_LEVEL";
+        public const string RequestIdHeader = "x-typesafe-request-id";
+        public const string Version = "{scrubbed version}";
+        public static readonly System.TimeSpan DefaultTimeout;
+    }
+    public class TypeSafeException : System.Exception
+    {
+        public TypeSafeException(string message) { }
+        public TypeSafeException(string message, System.Exception? innerException) { }
+    }
+    public class TypeSafeInternalServerException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeInternalServerException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public class TypeSafeNotFoundException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeNotFoundException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public class TypeSafePermissionDeniedException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafePermissionDeniedException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public class TypeSafeRateLimitException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeRateLimitException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+        public System.TimeSpan? RetryAfter { get; }
+    }
+    public class TypeSafeUnprocessableEntityException : TypeSafe.TypeSafeApiException
+    {
+        public TypeSafeUnprocessableEntityException(System.Net.HttpStatusCode statusCode, System.Text.Json.Nodes.JsonNode? body, System.Collections.Generic.IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null) { }
+    }
+    public sealed class Usage : System.IEquatable<TypeSafe.Usage>
+    {
+        public Usage(long? InputTokens = default, long? OutputTokens = default) { }
+        [System.Text.Json.Serialization.JsonPropertyName("input_tokens")]
+        public long? InputTokens { get; init; }
+        [System.Text.Json.Serialization.JsonPropertyName("output_tokens")]
+        public long? OutputTokens { get; init; }
+    }
+}

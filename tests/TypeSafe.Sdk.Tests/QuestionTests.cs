@@ -109,7 +109,7 @@ public class QuestionTests
     public void JsonNodesCanBeReusedAcrossQuestions()
     {
         var shared = new JsonObject { ["text"] = "shared instructions" };
-        var questions = new Questions
+        var questions = new Dictionary<string, Question>
         {
             ["a"] = Question.Noul(shared),
             ["b"] = Question.Choice(shared, "x"),
@@ -124,7 +124,28 @@ public class QuestionTests
     [Fact]
     public void NullQuestionIsRejected()
     {
-        var error = Assert.Throws<TypeSafeException>(() => Question.Normalize(new Questions { ["a"] = null! }));
+        var error = Assert.Throws<TypeSafeException>(() => Question.Normalize(new Dictionary<string, Question> { ["a"] = null! }));
         Assert.Contains("\"a\"", error.Message);
+    }
+
+    [Fact]
+    public void BuildersReturnQuestionsTypedByTheirAnswer()
+    {
+        // Each builder result assigns to Question<TAnswer> for the answer type it produces.
+        Question<NoulAnswer> noul = Question.Noul("Is it urgent?");
+        Question<ChoiceAnswer> choice = Question.Choice("Tone?", "calm", "angry");
+        Question<ScoreAnswer> score = Question.Score("How clear?", "unclear", "clear");
+
+        Assert.IsType<NoulQuestion>(noul);
+        Assert.IsType<ChoiceQuestion>(choice);
+        Assert.IsType<ScoreQuestion>(score);
+
+        // The generic intermediate adds nothing to the wire shape.
+        Assert.Equal("""{"type":"noul","instructions":"Is it urgent?"}""", Wire(noul));
+
+        // RawQuestion stays on the non-generic base: its answer type is not known at compile time.
+        Question raw = Question.FromJson(new JsonObject { ["type"] = "noul" });
+        Assert.IsType<RawQuestion>(raw);
+        Assert.False(raw is Question<NoulAnswer>);
     }
 }
