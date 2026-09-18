@@ -6,12 +6,15 @@ acceptance_criteria:
 - dotnet publish of the demo with PublishAot=true completes with warnings limited
   to the annotated overload
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-6
+- US-TSDK-8
+- US-TSDK-9
 epic_id: EPIC-TSDK-1
 id: US-TSDK-2
 points: 3
 priority: must
-status: backlog
+status: done
 tags:
 - step-1
 - aot

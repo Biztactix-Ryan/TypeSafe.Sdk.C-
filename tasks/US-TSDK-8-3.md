@@ -1,13 +1,14 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-8-5
 id: US-TSDK-8-3
-points: null
-status: todo
+points: 1
+status: done
 story_id: US-TSDK-8
 tags: []
 title: 'Test: Validation exceptions still carry status, body, headers, request id

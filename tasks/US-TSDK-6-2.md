@@ -1,13 +1,14 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-6-5
 id: US-TSDK-6-2
-points: null
-status: todo
+points: 1
+status: done
 story_id: US-TSDK-6
 tags: []
 title: 'Test: README documents the camelCase naming behaviour of the reflection overload

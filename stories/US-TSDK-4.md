@@ -7,12 +7,13 @@ acceptance_criteria:
   throws
 - Unit tests cover null, string, object, array and typed From<T> paths
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-1
 epic_id: EPIC-TSDK-2
 id: US-TSDK-4
 points: 3
 priority: must
-status: backlog
+status: done
 tags:
 - step-2
 title: Introduce the Content value type

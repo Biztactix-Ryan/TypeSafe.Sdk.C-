@@ -6,12 +6,14 @@ acceptance_criteria:
 - Validation errors (empty questions, empty score criteria, missing type) keep their
   current messages
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-5
+- US-TSDK-7
 epic_id: EPIC-TSDK-3
 id: US-TSDK-9
 points: 3
 priority: must
-status: backlog
+status: done
 tags:
 - step-3
 - json

@@ -6,12 +6,13 @@ acceptance_criteria:
   Content.From<T> with a JsonSerializerContext
 - The demo uses the typed From<T> path
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-5
 epic_id: EPIC-TSDK-2
 id: US-TSDK-6
 points: 2
 priority: should
-status: backlog
+status: done
 tags:
 - step-2
 - aot

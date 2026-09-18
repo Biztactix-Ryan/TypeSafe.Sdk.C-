@@ -4,10 +4,11 @@ assignee: null
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-8-6
 id: US-TSDK-8-4
-points: null
-status: todo
+points: 1
+status: done
 story_id: US-TSDK-8
 tags: []
 title: 'Test: Library line count drops by at least 150 lines'

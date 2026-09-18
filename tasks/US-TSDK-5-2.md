@@ -1,13 +1,14 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-5-5
 id: US-TSDK-5-2
-points: null
-status: todo
+points: 1
+status: done
 story_id: US-TSDK-5
 tags: []
 title: 'Test: Question.Score("urgency", "How urgent?", ["can wait", "today"]) compiles

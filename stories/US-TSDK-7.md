@@ -7,12 +7,14 @@ acceptance_criteria:
   record
 - Integer-keyed legend and probabilities deserialize to IReadOnlyDictionary<int, T>
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-1
+- US-TSDK-3
 epic_id: EPIC-TSDK-3
 id: US-TSDK-7
 points: 5
 priority: must
-status: backlog
+status: done
 tags:
 - step-3
 - json

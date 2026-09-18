@@ -6,12 +6,14 @@ acceptance_criteria:
 - Existing question serialization tests pass unchanged in their expected JSON
 - The generic Score<TDescription> and Choice<TDescription> overloads are removed
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-3
+- US-TSDK-4
 epic_id: EPIC-TSDK-2
 id: US-TSDK-5
 points: 5
 priority: must
-status: backlog
+status: done
 tags:
 - step-2
 - breaking

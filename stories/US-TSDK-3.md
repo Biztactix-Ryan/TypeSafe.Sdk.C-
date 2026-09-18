@@ -8,12 +8,13 @@ acceptance_criteria:
 - NoulAnswer.Probability and ChoiceAnswer.Label exist as aliases of Noul and Choice
 - TypeSafeClientOptions uses init setters and README examples still compile
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-1
 epic_id: EPIC-TSDK-1
 id: US-TSDK-3
 points: 5
 priority: must
-status: backlog
+status: done
 tags:
 - step-1
 - breaking

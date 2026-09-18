@@ -10,7 +10,7 @@ epic_id: EPIC-TSDK-1
 id: US-TSDK-1
 points: 3
 priority: must
-status: backlog
+status: done
 tags:
 - step-1
 title: Retarget all projects to net10.0

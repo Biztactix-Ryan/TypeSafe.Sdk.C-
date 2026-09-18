@@ -6,10 +6,10 @@ Unofficial C# SDK for the TypeSafe AI API, ported from the official Python and J
 
 ### Tech Stack
 
-- **Language**: C# 12 (LangVersion latest on the .NET 10 SDK); retarget to C# 14 / net10.0 planned
-- **Framework**: .NET class library, `TargetFramework` net8.0 (tests and demo use `RollForward=Major` because the dev machine has no .NET 8 runtime)
+- **Language**: C# 14 (LangVersion latest on the .NET 10 SDK)
+- **Framework**: .NET class library, `TargetFramework` net10.0 for library, tests and demo; requires the .NET 10 SDK/runtime
 - **Database**: none
-- **Key Libraries**: `System.Text.Json` (JsonNode-based, in-box), `Microsoft.Extensions.Logging.Abstractions` 8.0.3 (only NuGet dependency), xunit 2.9 + `Microsoft.NET.Test.Sdk` 17.12 for tests
+- **Key Libraries**: `System.Text.Json` (JsonNode-based, in-box), `Microsoft.Extensions.Logging.Abstractions` 10.0.12 (only NuGet dependency), xunit 2.9 + `Microsoft.NET.Test.Sdk` 17.12 for tests
 
 ### Components
 
@@ -38,13 +38,13 @@ See DECISIONS.md. Headlines: async-only API; wire-name parity for answer propert
 
 | Dependency | Version | Why |
 |------------|---------|-----|
-| Microsoft.Extensions.Logging.Abstractions | 8.0.3 | Standard .NET logging contract; ubiquitous, no transitive weight |
+| Microsoft.Extensions.Logging.Abstractions | 10.0.12 | Standard .NET logging contract; ubiquitous, no transitive weight |
 | xunit, xunit.runner.visualstudio, Microsoft.NET.Test.Sdk | 2.9.3 / 3.0.1 / 17.12.0 | Tests only |
 | Upstream SDKs (reference, not a package dependency) | typesafe-sdk-python 0.6.0, @typesafe-ai/sdk 0.6.0 | Source of truth for wire behaviour |
 
 ## Development Setup
 
-- Prerequisites: .NET SDK 10.x (9.x also works). No .NET 8 runtime is needed thanks to roll-forward.
+- Prerequisites: .NET SDK 10.x or later (everything targets net10.0, so an older SDK will not build it).
 - Build: `dotnet build` · Test: `dotnet test` · Pack: `dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release`
 - Demo: `TYPESAFE_API_KEY=... dotnet run --project examples/TypeSafe.Sdk.Demo`
 - Env vars (names only): `TYPESAFE_API_KEY` (required at runtime), `TYPESAFE_BASE_URL`, `TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_LOG_LEVEL`.

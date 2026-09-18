@@ -40,7 +40,7 @@ Cross-cutting pieces: `RetryPolicy` (record, validated on use), `Internal/RetryA
 - **Request headers** set by the SDK and protected from override: `Authorization: Bearer`, `Accept`, `Content-Type`, `User-Agent`, `X-TypeSafe-SDK`, `X-TypeSafe-Runtime`, `X-TypeSafe-Retry-Count`.
 - **Response header** `x-typesafe-request-id` surfaces as `RequestId` on responses and exceptions.
 - **Exceptions**: `TypeSafeException` base; `TypeSafeApiException` and per-status subclasses for non-2xx; `TypeSafeApiResponseValidationException` (2xx with bad shape, carries `FieldPath`); `TypeSafeApiConnectionException` and `TypeSafeApiTimeoutException` for no-response failures; caller cancellation is the standard `OperationCanceledException`.
-- **Forward compatibility**: unknown answer types are skipped with a warning; unknown JSON fields are ignored.
+- **Forward compatibility**: an answer of an unknown type is warned about and kept in `Answers` as a bare `Answer` (its whole payload, `type` included, in `AdditionalProperties`), but excluded from the typed views; unknown JSON fields land in extension data.
 
 ## Standards
 

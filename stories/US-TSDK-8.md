@@ -6,12 +6,13 @@ acceptance_criteria:
 - Validation exceptions still carry status, body, headers, request id and endpoint
 - Library line count drops by at least 150 lines
 created: '2026-09-18'
-depends_on: []
+depends_on:
+- US-TSDK-7
 epic_id: EPIC-TSDK-3
 id: US-TSDK-8
 points: 5
 priority: must
-status: backlog
+status: done
 tags:
 - step-3
 - json
