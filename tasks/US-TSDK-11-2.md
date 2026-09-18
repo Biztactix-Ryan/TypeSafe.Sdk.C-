@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-11-6
 id: US-TSDK-11-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-11
 tags: []
 title: 'Test: Question.Noul("billing", ...) returns Named<NoulAnswer> and Named<T>

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-18-4
 id: US-TSDK-18-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-18
 tags: []
 title: 'Test: TypeSafeApiConnectionException has a nullable HttpRequestError Error

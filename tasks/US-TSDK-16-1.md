@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-16-3
 id: US-TSDK-16-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-16
 tags: []
 title: 'Test: The demo declares Tone and Urgency enums and prints Nearest and enum-keyed

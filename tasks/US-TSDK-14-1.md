@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-14-5
 id: US-TSDK-14-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: 'Test: Labels come from JsonStringEnumMemberName when present, otherwise JsonNamingPolicy.SnakeCaseLower'

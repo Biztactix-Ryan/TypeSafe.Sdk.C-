@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-21-5
 id: US-TSDK-21-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-21
 tags: []
 title: 'Test: A workflow at .github/workflows/ci.yml runs dotnet build, dotnet test

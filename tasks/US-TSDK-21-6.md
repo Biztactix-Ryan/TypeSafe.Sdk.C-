@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-21-5
 id: US-TSDK-21-6
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-21
 tags: []
 title: Add the README build badge and CI docs

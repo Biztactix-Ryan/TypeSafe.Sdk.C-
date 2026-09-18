@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -11,7 +11,7 @@ depends_on:
 - US-TSDK-15-5
 id: US-TSDK-23-4
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-23
 tags: []
 title: Add the PublicApiGenerator + Verify snapshot test and CONTRIBUTING notes

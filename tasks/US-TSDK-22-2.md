@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-22-5
 id: US-TSDK-22-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-22
 tags: []
 title: 'Test: The package includes README, license expression, symbols and SourceLink'

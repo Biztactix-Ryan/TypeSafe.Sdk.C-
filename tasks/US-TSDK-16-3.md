@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -10,7 +10,7 @@ depends_on:
 - US-TSDK-13-4
 id: US-TSDK-16-3
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-16
 tags: []
 title: Showcase Tone and Urgency enums in the demo and add a README Enums section

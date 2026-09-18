@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-12-6
 id: US-TSDK-12-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-12
 tags: []
 title: 'Test: Get throws TypeSafeException naming both the actual and requested answer

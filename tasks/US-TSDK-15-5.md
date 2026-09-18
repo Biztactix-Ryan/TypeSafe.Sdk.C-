@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -9,7 +9,7 @@ depends_on:
 - US-TSDK-12-6
 id: US-TSDK-15-5
 points: 3
-status: todo
+status: done
 story_id: US-TSDK-15
 tags: []
 title: Add ScoreQuestion<TEnum>, ScoreAnswer<TEnum> with Nearest and Question.Score<TEnum>

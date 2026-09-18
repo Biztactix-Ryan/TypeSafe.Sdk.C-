@@ -1,5 +1,5 @@
 ---
-completed_points: 0
+completed_points: 34
 created: '2026-09-18'
 end_date: '2026-10-02'
 goal: Callers write typed, name-first questions (including enum-typed choices and
@@ -20,7 +20,7 @@ planned_stories:
 - US-TSDK-23
 - US-TSDK-22
 start_date: '2026-09-18'
-status: active
+status: completed
 updated: '2026-09-18'
 ---
 

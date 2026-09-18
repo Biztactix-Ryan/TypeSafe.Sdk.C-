@@ -47,6 +47,7 @@ See DECISIONS.md. Headlines: async-only API; wire-name parity for answer propert
 - Prerequisites: .NET SDK 10.x or later (everything targets net10.0, so an older SDK will not build it).
 - Build: `dotnet build` · Test: `dotnet test` · Pack: `dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release`
 - Demo: `TYPESAFE_API_KEY=... dotnet run --project examples/TypeSafe.Sdk.Demo`
+- Version check: `scripts/check-version.sh`. The package version lives in two places — `<Version>` in `src/TypeSafe.Sdk/TypeSafe.Sdk.csproj` and `TypeSafeConstants.Version` in `src/TypeSafe.Sdk/Constants.cs` — and they must always match. The script prints both and exits non-zero when they differ; `scripts/check-version.sh 0.7.0` additionally requires both to equal that version (for release workflows). Bump both values together.
 - Env vars (names only): `TYPESAFE_API_KEY` (required at runtime), `TYPESAFE_BASE_URL`, `TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_LOG_LEVEL`.
 - No seed data. Tests need no network and no env vars.
 

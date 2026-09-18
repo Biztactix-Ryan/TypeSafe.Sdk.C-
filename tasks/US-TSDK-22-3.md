@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-22-6
 id: US-TSDK-22-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-22
 tags: []
 title: 'Test: README install instructions reference the package id and the registry

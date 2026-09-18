@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -9,7 +9,7 @@ depends_on:
 - US-TSDK-12-6
 id: US-TSDK-13-4
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-13
 tags: []
 title: Rewrite the README quickstart and the demo around Named questions and Get

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-23-4
 id: US-TSDK-23-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-23
 tags: []
 title: 'Test: CONTRIBUTING notes explain how to accept a snapshot change'

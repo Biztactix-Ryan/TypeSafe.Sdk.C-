@@ -12,7 +12,7 @@ epic_id: EPIC-TSDK-7
 id: US-TSDK-22
 points: 3
 priority: should
-status: ready
+status: done
 tags:
 - nuget
 - release

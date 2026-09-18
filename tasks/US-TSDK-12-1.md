@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-12-5
 id: US-TSDK-12-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-12
 tags: []
 title: 'Test: SystemOneAsync has an overload taking params ReadOnlySpan<INamedQuestion>

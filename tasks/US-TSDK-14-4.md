@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-14-6
 id: US-TSDK-14-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: 'Test: A label not declared on the enum raises TypeSafeApiResponseValidationException

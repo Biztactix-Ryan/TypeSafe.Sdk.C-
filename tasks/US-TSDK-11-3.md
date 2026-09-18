@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-11-6
 id: US-TSDK-11-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-11
 tags: []
 title: 'Test: The dictionary-based overload still works for callers porting from Python'

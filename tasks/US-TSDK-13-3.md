@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-13-4
 id: US-TSDK-13-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-13
 tags: []
 title: 'Test: The README Differences section explains how typed answers compare to

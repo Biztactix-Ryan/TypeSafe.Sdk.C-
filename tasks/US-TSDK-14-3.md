@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-14-6
 id: US-TSDK-14-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: 'Test: ChoiceAnswer<TEnum> exposes TEnum Choice and IReadOnlyDictionary<TEnum,

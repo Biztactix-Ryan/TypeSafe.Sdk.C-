@@ -1,13 +1,13 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
 depends_on: []
 id: US-TSDK-21-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-21
 tags: []
 title: Bump the package version to 0.7.0 and add a version-match check

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-21-6
 id: US-TSDK-21-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-21
 tags: []
 title: 'Test: The README shows a build status badge'

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-14-6
 id: US-TSDK-14-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: 'Test: Description attributes on enum members are sent as criteria descriptions'

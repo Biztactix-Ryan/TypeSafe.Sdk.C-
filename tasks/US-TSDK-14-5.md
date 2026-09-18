@@ -1,13 +1,13 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
 depends_on: []
 id: US-TSDK-14-5
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: Add the trim-safe enum label and description helper

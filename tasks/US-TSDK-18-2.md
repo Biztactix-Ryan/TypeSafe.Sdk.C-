@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-18-4
 id: US-TSDK-18-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-18
 tags: []
 title: 'Test: A test asserts NameResolutionError is surfaced when the stub throws

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-15-5
 id: US-TSDK-15-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-15
 tags: []
 title: 'Test: Untyped ScoreAnswer remains available for dynamic rubrics'

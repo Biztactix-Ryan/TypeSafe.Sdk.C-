@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -9,7 +9,7 @@ depends_on:
 - US-TSDK-12-6
 id: US-TSDK-14-6
 points: 3
-status: todo
+status: done
 story_id: US-TSDK-14
 tags: []
 title: Add ChoiceQuestion<TEnum>, ChoiceAnswer<TEnum> and Question.Choice<TEnum>

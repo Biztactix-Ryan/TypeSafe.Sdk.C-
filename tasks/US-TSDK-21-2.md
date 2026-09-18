@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-21-5
 id: US-TSDK-21-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-21
 tags: []
 title: 'Test: The workflow fails if TypeSafe.Sdk.csproj Version and TypeSafeConstants.Version

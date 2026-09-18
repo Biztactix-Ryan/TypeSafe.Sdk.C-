@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-22-4
 id: US-TSDK-22-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-22
 tags: []
 title: 'Test: A workflow triggered by v* tags packs with the tag version and pushes

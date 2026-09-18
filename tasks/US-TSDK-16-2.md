@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-16-3
 id: US-TSDK-16-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-16
 tags: []
 title: 'Test: README has an Enums section showing both builders and the attribute
