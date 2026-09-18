@@ -131,17 +131,26 @@ internal static class Clients
         BackoffMax = TimeSpan.FromMilliseconds(1),
     };
 
-    public static TypeSafeClient Create(StubHandler handler, Action<TypeSafeClientOptions>? configure = null)
+    /// <summary>
+    /// Builds a stubbed client. <see cref="TypeSafeClientOptions"/> is init-only, so tweaks are
+    /// collected on a mutable <see cref="ClientSetup"/> first and applied in the object initializer.
+    /// </summary>
+    public static TypeSafeClient Create(StubHandler handler, Action<ClientSetup>? configure = null)
     {
-        var options = new TypeSafeClientOptions
+        var setup = new ClientSetup { Retry = FastRetry };
+        configure?.Invoke(setup);
+        return new TypeSafeClient(new TypeSafeClientOptions
         {
             ApiKey = ApiKey,
             HttpMessageHandler = handler,
-            LogLevel = LogLevel.None,
-            Retry = FastRetry,
-        };
-        configure?.Invoke(options);
-        return new TypeSafeClient(options);
+            BaseUrl = setup.BaseUrl,
+            DefaultModel = setup.DefaultModel,
+            DefaultHeaders = setup.DefaultHeaders,
+            Timeout = setup.Timeout,
+            Retry = setup.Retry,
+            LogLevel = setup.LogLevel ?? LogLevel.None,
+            Logger = setup.Logger,
+        });
     }
 
     public static Questions SampleQuestions() => new()
@@ -150,6 +159,24 @@ internal static class Clients
         ["tone"] = Question.Choice("What is the tone?", "calm", "frustrated", "angry"),
         ["urgency"] = Question.Score("How urgent?", "can wait", "this week", "today", "right now"),
     };
+}
+
+/// <summary>Mutable stand-in for the init-only client options, for tests that tweak one or two values.</summary>
+internal sealed class ClientSetup
+{
+    public string? BaseUrl { get; set; }
+
+    public string? DefaultModel { get; set; }
+
+    public IEnumerable<KeyValuePair<string, string>>? DefaultHeaders { get; set; }
+
+    public TimeSpan? Timeout { get; set; }
+
+    public RetryPolicy? Retry { get; set; }
+
+    public LogLevel? LogLevel { get; set; }
+
+    public ILogger? Logger { get; set; }
 }
 
 /// <summary>Sets environment variables for the duration of a test and restores them afterwards.</summary>

@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using TypeSafe.Internal;
 
 namespace TypeSafe.Tests;
 
@@ -50,11 +52,11 @@ public class RequestTests
         using var client = Clients.Create(handler);
         var questions = Clients.SampleQuestions();
 
-        await client.SystemOneAsync(new { Document = "hello", Tags = new[] { "a", "b" } }, questions);
+        await client.SystemOneAsync(Content.From(new { Document = "hello", Tags = new[] { "a", "b" } }), questions);
         await client.SystemOneAsync("plain text", questions);
         await client.SystemOneAsync(new JsonArray("x", 1), questions);
-        await client.SystemOneAsync(new Dictionary<string, object?> { ["k"] = null }, questions);
-        await client.SystemOneAsync(null, questions);
+        await client.SystemOneAsync(Content.From(new Dictionary<string, object?> { ["k"] = null }), questions);
+        await client.SystemOneAsync(Content.Null, questions);
 
         Assert.Equal("""{"document":"hello","tags":["a","b"]}""", handler.Requests[0].Json!["state"]!.ToJsonString());
         Assert.Equal("plain text", (string?)handler.Requests[1].Json!["state"]);
@@ -63,6 +65,14 @@ public class RequestTests
         var withNull = Assert.IsType<JsonObject>(handler.Requests[4].Json);
         Assert.True(withNull.ContainsKey("state"));
         Assert.Null(withNull["state"]);
+    }
+
+    [Fact]
+    public void StateSerializationUsesTheSharedWebOptionsSingleton()
+    {
+        Assert.Same(JsonSerializerOptions.Web, JsonContent.SerializerOptions);
+        Assert.True(JsonContent.SerializerOptions.IsReadOnly);
+        Assert.Equal("""{"twoWords":1}""", JsonContent.From(new { TwoWords = 1 })!.ToJsonString());
     }
 
     [Fact]
@@ -85,6 +95,31 @@ public class RequestTests
         Assert.Equal(0.2, (double?)body["temperature"]);
         Assert.Equal("override-model", (string?)body["model"]);
         Assert.True(((JsonObject)body).ContainsKey("nothing"));
+    }
+
+    [Fact]
+    public async Task RawQuestionsReachTheWireVerbatim()
+    {
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler, o => o.DefaultModel = "wire-model");
+
+        await client.SystemOneAsync("x", new Questions
+        {
+            ["tone"] = Question.FromJson(new JsonObject
+            {
+                ["type"] = "choice",
+                ["instructions"] = "Tone?",
+                ["criteria"] = new JsonObject { ["calm"] = null },
+                ["future_field"] = 42,
+            }),
+        });
+
+        // The whole envelope, so the raw question's unmodelled field and the key order of both the
+        // question and the body around it are asserted on the bytes that left the client.
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(
+            """{"state":"x","model":"wire-model","questions":{"tone":{"type":"choice","instructions":"Tone?","criteria":{"calm":null},"future_field":42}}}""",
+            request.Body);
     }
 
     [Fact]
@@ -133,10 +168,10 @@ public class RequestTests
         Assert.EndsWith("/v1/models", request.Url.ToString());
         Assert.Null(request.Body);
         Assert.Null(request.Header("Content-Type"));
-        Assert.Equal(2, response.Models.Count);
-        Assert.Equal("jev-latest", response.Models[0].Name);
-        Assert.Equal("Latest model", response.Models[0].Description);
-        Assert.Equal("2026-09-01", response.Models[0].ReleaseDate);
+        Assert.Equal(2, response.Count);
+        Assert.Equal("jev-latest", response[0].Name);
+        Assert.Equal("Latest model", response[0].Description);
+        Assert.Equal("2026-09-01", response[0].ReleaseDate);
     }
 
     [Fact]

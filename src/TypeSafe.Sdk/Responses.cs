@@ -1,5 +1,8 @@
-using System.Globalization;
+using System.Collections;
+using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using TypeSafe.Internal;
 
 namespace TypeSafe;
@@ -11,7 +14,7 @@ public abstract class ApiResponse
     public string? RequestId { get; private set; }
 
     /// <summary>HTTP response status code, or <c>0</c> when not created from an HTTP response.</summary>
-    public int Status { get; private set; }
+    public HttpStatusCode StatusCode { get; private set; }
 
     /// <summary>HTTP response headers, keyed case-insensitively.</summary>
     public IReadOnlyDictionary<string, string> Headers { get; private set; } = HeaderSnapshot.Empty;
@@ -22,105 +25,139 @@ public abstract class ApiResponse
     internal void Attach(HttpResponseMessage response, IReadOnlyDictionary<string, string> headers)
     {
         RawHttpResponse = response;
-        Status = (int)response.StatusCode;
+        StatusCode = response.StatusCode;
         Headers = headers;
         RequestId = HeaderSnapshot.RequestId(headers);
     }
 }
 
-/// <summary>An answer to a single question, identified by its <see cref="Type"/>.</summary>
-public abstract class Answer
+/// <summary>
+/// An answer to a single question, identified by its <see cref="Type"/>. The record is not abstract
+/// so that an answer whose shape this SDK version does not model can still be carried as a bare
+/// <see cref="Answer"/>, with its fields in <see cref="AdditionalProperties"/>.
+/// </summary>
+[JsonPolymorphic(
+    TypeDiscriminatorPropertyName = "type",
+    UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
+[JsonDerivedType(typeof(NoulAnswer), "noul")]
+[JsonDerivedType(typeof(ChoiceAnswer), "choice")]
+[JsonDerivedType(typeof(ScoreAnswer), "score")]
+public record Answer
 {
-    private protected Answer() { }
+    /// <summary>
+    /// The wire discriminator: <c>noul</c>, <c>choice</c>, or <c>score</c>, or the empty string on a
+    /// bare <see cref="Answer"/>, which models no primitive of its own. Always ignored by the
+    /// serializer: <c>type</c> is polymorphic metadata, written and read by the discriminator.
+    /// </summary>
+    [JsonIgnore]
+    public virtual string Type => "";
 
-    /// <summary>The wire discriminator: <c>noul</c>, <c>choice</c>, or <c>score</c>.</summary>
-    public abstract string Type { get; }
+    /// <summary>
+    /// Fields the server sent that this answer record does not model, so a newer server never
+    /// breaks an older client. <c>null</c> when the answer was built in code rather than decoded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Settable rather than init-only because the <c>System.Text.Json</c> source generator cannot
+    /// assign an init-only property: it models one as a constructor parameter, and extension data
+    /// may not bind to a constructor parameter.
+    /// </para>
+    /// <para>
+    /// On a bare <see cref="Answer"/> — an answer whose <c>type</c> this SDK version does not model —
+    /// this bag holds the whole answer object, the <c>type</c> discriminator included, so
+    /// <c>AdditionalProperties["type"]</c> names the unrecognized type. That is the work of
+    /// <see cref="AnswerMapConverter"/>, not of
+    /// <see cref="JsonUnknownDerivedTypeHandling.FallBackToBaseType"/>, which applies to writing only:
+    /// reading such an answer straight through <c>TypeSafeJsonContext.Default.Answer</c> throws
+    /// <c>JsonException: Read unrecognized type discriminator id 'rank'.</c> (verified in
+    /// <c>JsonContextTests</c>). Since the discriminator is carried as ordinary extension data,
+    /// writing a bare answer back out reproduces the payload it arrived as.
+    /// </para>
+    /// </remarks>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
 }
 
 /// <summary>A yes/no answer. See the <see href="https://docs.typesafe.ai/primitives/noul">noul primitive</see>.</summary>
-public sealed class NoulAnswer : Answer
+/// <param name="Noul">Probability of a yes answer, from zero to one.</param>
+public sealed record NoulAnswer(
+    [property: JsonPropertyName("noul")] double Noul) : Answer
 {
-    /// <summary>Create a yes/no answer.</summary>
-    public NoulAnswer(double noul)
-    {
-        Noul = noul;
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "noul";
 
-    /// <summary>Probability of a yes answer, from zero to one.</summary>
-    public double Noul { get; }
+    /// <summary>
+    /// Alias of <see cref="Noul"/> for callers who prefer the .NET-style name.
+    /// Computed, never sent or received on the wire.
+    /// </summary>
+    [JsonIgnore]
+    public double Probability => Noul;
 }
 
 /// <summary>A selected label and its probabilities. See the <see href="https://docs.typesafe.ai/primitives/choice">choice primitive</see>.</summary>
-public sealed class ChoiceAnswer : Answer
+/// <param name="Choice">The selected label.</param>
+/// <param name="Confidence">Reported confidence in the selected label.</param>
+/// <param name="Probabilities">Probabilities keyed by label.</param>
+public sealed record ChoiceAnswer(
+    [property: JsonPropertyName("choice")] string Choice,
+    [property: JsonPropertyName("confidence")] double Confidence,
+    [property: JsonPropertyName("probabilities")] IReadOnlyDictionary<string, double> Probabilities) : Answer
 {
-    /// <summary>Create a choice answer.</summary>
-    public ChoiceAnswer(string choice, double confidence, IReadOnlyDictionary<string, double> probabilities)
-    {
-        Choice = choice ?? throw new ArgumentNullException(nameof(choice));
-        Confidence = confidence;
-        Probabilities = probabilities ?? throw new ArgumentNullException(nameof(probabilities));
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "choice";
 
-    /// <summary>The selected label.</summary>
-    public string Choice { get; }
-
-    /// <summary>Reported confidence in the selected label.</summary>
-    public double Confidence { get; }
-
-    /// <summary>Probabilities keyed by label.</summary>
-    public IReadOnlyDictionary<string, double> Probabilities { get; }
+    /// <summary>
+    /// Alias of <see cref="Choice"/> for callers who prefer the .NET-style name.
+    /// Computed, never sent or received on the wire.
+    /// </summary>
+    [JsonIgnore]
+    public string Label => Choice;
 }
 
 /// <summary>An expected score with its rubric and probabilities. See the <see href="https://docs.typesafe.ai/primitives/score">score primitive</see>.</summary>
-public sealed class ScoreAnswer : Answer
+/// <param name="Score">Expected score, which may fall between the integer rubric levels.</param>
+/// <param name="Confidence">Reported confidence in the score.</param>
+/// <param name="Legend">Rubric descriptions keyed by integer score, as text, a JSON object, or an array.</param>
+/// <param name="Probabilities">Probabilities keyed by integer score.</param>
+public sealed record ScoreAnswer(
+    [property: JsonPropertyName("score")] double Score,
+    [property: JsonPropertyName("confidence")] double Confidence,
+    [property: JsonPropertyName("legend")] IReadOnlyDictionary<int, JsonNode?> Legend,
+    [property: JsonPropertyName("probabilities")] IReadOnlyDictionary<int, double> Probabilities) : Answer
 {
-    /// <summary>Create a score answer.</summary>
-    public ScoreAnswer(double score, double confidence, IReadOnlyDictionary<int, JsonNode?> legend, IReadOnlyDictionary<int, double> probabilities)
-    {
-        Score = score;
-        Confidence = confidence;
-        Legend = legend ?? throw new ArgumentNullException(nameof(legend));
-        Probabilities = probabilities ?? throw new ArgumentNullException(nameof(probabilities));
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "score";
-
-    /// <summary>Expected score, which may fall between the integer rubric levels.</summary>
-    public double Score { get; }
-
-    /// <summary>Reported confidence in the score.</summary>
-    public double Confidence { get; }
-
-    /// <summary>Rubric descriptions keyed by integer score, as text, a JSON object, or an array.</summary>
-    public IReadOnlyDictionary<int, JsonNode?> Legend { get; }
-
-    /// <summary>Probabilities keyed by integer score.</summary>
-    public IReadOnlyDictionary<int, double> Probabilities { get; }
 }
 
 /// <summary>Token counts for a request, when reported by the API.</summary>
-public sealed class Usage
-{
-    /// <summary>Create usage metadata.</summary>
-    public Usage(long? inputTokens = null, long? outputTokens = null)
-    {
-        InputTokens = inputTokens;
-        OutputTokens = outputTokens;
-    }
+/// <param name="InputTokens">Number of input tokens used, or <c>null</c> when the API did not report it.</param>
+/// <param name="OutputTokens">Number of output tokens used, or <c>null</c> when the API did not report it.</param>
+public sealed record Usage(
+    [property: JsonPropertyName("input_tokens")] long? InputTokens = null,
+    [property: JsonPropertyName("output_tokens")] long? OutputTokens = null);
 
-    /// <summary>Number of input tokens used, or <c>null</c> when the API did not report it.</summary>
-    public long? InputTokens { get; }
-
-    /// <summary>Number of output tokens used, or <c>null</c> when the API did not report it.</summary>
-    public long? OutputTokens { get; }
-}
+/// <summary>
+/// The wire shape of a <c>POST /v1/systemone</c> response body. Decoded by the source-generated
+/// <c>TypeSafeJsonContext</c>; <see cref="SystemOneResponse"/> is the public projection of it.
+/// </summary>
+/// <param name="Model">The model that answered the request.</param>
+/// <param name="Usage">Token usage for the request.</param>
+/// <param name="Answers">
+/// Answers keyed by question name, read through <see cref="AnswerMapConverter"/> so an answer type
+/// this SDK version does not model is carried as a bare <see cref="Answer"/> instead of failing the read.
+/// </param>
+/// <param name="RequestId">
+/// The request ID echoed in the body, or <c>null</c> when the API reported it only in the
+/// <c>x-typesafe-request-id</c> header.
+/// </param>
+internal sealed record SystemOneBody(
+    [property: JsonPropertyName("model")] string Model,
+    [property: JsonPropertyName("usage")] Usage Usage,
+    [property: JsonPropertyName("answers"), JsonConverter(typeof(AnswerMapConverter))] IReadOnlyDictionary<string, Answer> Answers,
+    [property: JsonPropertyName("request_id")] string? RequestId = null);
 
 /// <summary>
 /// Answers keyed by question name, grouped by type, with model and usage metadata.
@@ -146,7 +183,12 @@ public sealed class SystemOneResponse : ApiResponse
     /// <summary>Token usage for the request.</summary>
     public Usage Usage { get; }
 
-    /// <summary>All answer objects keyed by question name.</summary>
+    /// <summary>
+    /// All answer objects keyed by question name, including any whose type this SDK version does not
+    /// model: those arrive as a bare <see cref="Answer"/> carrying the whole payload in
+    /// <see cref="Answer.AdditionalProperties"/>, and reach none of <see cref="Nouls"/>,
+    /// <see cref="Choices"/> or <see cref="Scores"/>.
+    /// </summary>
     public IReadOnlyDictionary<string, Answer> Answers { get; }
 
     /// <summary>Yes/no answers keyed by question name.</summary>
@@ -168,165 +210,82 @@ public sealed class SystemOneResponse : ApiResponse
         return filtered;
     }
 
-    /// <summary>Decode a <c>POST /v1/systemone</c> body, skipping answer types this SDK does not model.</summary>
-    internal static SystemOneResponse Parse(JsonNode? body, Action<string>? warn)
+    /// <summary>
+    /// Project a decoded <c>POST /v1/systemone</c> body, warning about answer types this SDK does not model.
+    /// </summary>
+    /// <param name="body">The body decoded by <c>TypeSafeJsonContext</c>.</param>
+    /// <param name="warn">Called once per unmodelled answer, naming the question and the unrecognized type.</param>
+    internal static SystemOneResponse FromBody(SystemOneBody body, Action<string>? warn)
     {
-        var root = Wire.Object(body, "");
-        var model = Wire.String(root, "model", "");
-        var usage = ParseUsage(Wire.Object(Wire.Required(root, "usage", ""), "usage"), "usage");
-        var answers = new Dictionary<string, Answer>();
-        var answersJson = Wire.Object(Wire.Required(root, "answers", ""), "answers");
-        foreach (var (name, node) in answersJson)
+        // Forward-compat: an answer whose type this SDK version does not model decodes as a bare
+        // Answer, with every field (including "type") in AdditionalProperties. Each one is reported
+        // once, then kept in Answers so a caller can inspect what the server sent; the per-type views
+        // match on the derived records, so a bare answer reaches none of them. The raw payload also
+        // stays available through RawHttpResponse.
+        if (warn is not null)
         {
-            var path = $"answers.{name}";
-            var answerJson = Wire.Object(node, path);
-            var type = Wire.String(answerJson, "type", path);
-            var answer = ParseAnswer(type, answerJson, path);
-            if (answer is null)
+            foreach (var (name, answer) in body.Answers)
             {
-                // Forward-compat: ignore answer types this SDK version does not model. The raw payload
-                // is still available through RawHttpResponse.
-                warn?.Invoke($"Ignoring answer \"{name}\" with unrecognized type \"{type}\"");
-                continue;
+                if (answer.GetType() == typeof(Answer))
+                {
+                    warn($"Ignoring answer \"{name}\" with unrecognized type \"{UnmodelledType(answer)}\"");
+                }
             }
-            answers[name] = answer;
         }
-        return new SystemOneResponse(model, usage, answers);
+        return new SystemOneResponse(body.Model, body.Usage, body.Answers);
     }
 
-    private static Usage ParseUsage(JsonObject json, string path) =>
-        new(Wire.OptionalInteger(json, "input_tokens", path), Wire.OptionalInteger(json, "output_tokens", path));
-
-    private static Answer? ParseAnswer(string type, JsonObject json, string path) => type switch
-    {
-        "noul" => new NoulAnswer(Wire.Number(json, "noul", path)),
-        "choice" => new ChoiceAnswer(
-            Wire.String(json, "choice", path),
-            Wire.Number(json, "confidence", path),
-            Wire.NumberMap(Wire.Object(Wire.Required(json, "probabilities", path), $"{path}.probabilities"), $"{path}.probabilities")),
-        "score" => new ScoreAnswer(
-            Wire.Number(json, "score", path),
-            Wire.Number(json, "confidence", path),
-            Wire.Legend(Wire.Object(Wire.Required(json, "legend", path), $"{path}.legend"), $"{path}.legend"),
-            Wire.ScoreMap(Wire.Object(Wire.Required(json, "probabilities", path), $"{path}.probabilities"), $"{path}.probabilities")),
-        _ => null,
-    };
+    /// <summary>The <c>type</c> a bare answer arrived with, from its extension data, or the empty string.</summary>
+    private static string UnmodelledType(Answer answer) =>
+        answer.AdditionalProperties is { } fields
+        && fields.TryGetValue("type", out var type)
+        && type.ValueKind == JsonValueKind.String
+            ? type.GetString() ?? ""
+            : "";
 }
 
 /// <summary>Metadata for an available model.</summary>
-public sealed class ModelMetadata
+/// <param name="Name">The model name, usable as a request's <c>model</c>.</param>
+/// <param name="Description">A description of the model.</param>
+/// <param name="ReleaseDate">The model's release date, as reported by the API.</param>
+public sealed record ModelMetadata(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("description")] string Description,
+    [property: JsonPropertyName("release_date")] string ReleaseDate);
+
+/// <summary>
+/// The wire shape of a <c>GET /v1/models</c> response body. Decoded by the source-generated
+/// <c>TypeSafeJsonContext</c>; <see cref="ListModelsResponse"/> is the public projection of it.
+/// </summary>
+/// <param name="Models">The models available to the account, in the order the API returned them.</param>
+internal sealed record ModelList(
+    [property: JsonPropertyName("models")] IReadOnlyList<ModelMetadata> Models);
+
+/// <summary>The models available to the account, as a read-only list of <see cref="ModelMetadata"/>.</summary>
+public sealed class ListModelsResponse : ApiResponse, IReadOnlyList<ModelMetadata>
 {
-    /// <summary>Create model metadata.</summary>
-    public ModelMetadata(string name, string description, string releaseDate)
-    {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
-        Description = description ?? throw new ArgumentNullException(nameof(description));
-        ReleaseDate = releaseDate ?? throw new ArgumentNullException(nameof(releaseDate));
-    }
+    private readonly IReadOnlyList<ModelMetadata> _models;
 
-    /// <summary>The model name, usable as a request's <c>model</c>.</summary>
-    public string Name { get; }
-
-    /// <summary>A description of the model.</summary>
-    public string Description { get; }
-
-    /// <summary>The model's release date, as reported by the API.</summary>
-    public string ReleaseDate { get; }
-}
-
-/// <summary>The models available to the account.</summary>
-public sealed class ListModelsResponse : ApiResponse
-{
     /// <summary>Create a model list response.</summary>
     public ListModelsResponse(IReadOnlyList<ModelMetadata> models)
     {
-        Models = models ?? throw new ArgumentNullException(nameof(models));
+        _models = models ?? throw new ArgumentNullException(nameof(models));
     }
 
-    /// <summary>The available models.</summary>
-    public IReadOnlyList<ModelMetadata> Models { get; }
+    /// <summary>The number of available models.</summary>
+    public int Count => _models.Count;
 
-    /// <summary>Decode a <c>GET /v1/models</c> body.</summary>
-    internal static ListModelsResponse Parse(JsonNode? body)
-    {
-        var root = Wire.Object(body, "");
-        var list = Wire.Required(root, "models", "") as JsonArray ?? throw new ResponseFieldException("models");
-        var models = new List<ModelMetadata>(list.Count);
-        for (var i = 0; i < list.Count; i++)
-        {
-            var path = $"models.{i}";
-            var item = Wire.Object(list[i], path);
-            models.Add(new ModelMetadata(
-                Wire.String(item, "name", path),
-                Wire.String(item, "description", path),
-                Wire.String(item, "release_date", path)));
-        }
-        return new ListModelsResponse(models);
-    }
-}
+    /// <summary>The model at <paramref name="index"/>.</summary>
+    /// <param name="index">Zero-based index into the list of available models.</param>
+    public ModelMetadata this[int index] => _models[index];
 
-/// <summary>Raised while decoding a successful response body; carries the dotted path of the bad field.</summary>
-internal sealed class ResponseFieldException : Exception
-{
-    public ResponseFieldException(string fieldPath) : base($"Invalid response data at '{fieldPath}'.")
-    {
-        FieldPath = fieldPath;
-    }
+    /// <summary>Enumerate the available models, in the order the API returned them.</summary>
+    /// <returns>An enumerator over the available models.</returns>
+    public IEnumerator<ModelMetadata> GetEnumerator() => _models.GetEnumerator();
 
-    public string FieldPath { get; }
-}
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-/// <summary>Strict field readers for response bodies. Unknown fields are ignored so newer servers never break older clients.</summary>
-internal static class Wire
-{
-    private static string Join(string path, string key) => path.Length == 0 ? key : $"{path}.{key}";
-
-    public static JsonObject Object(JsonNode? node, string path) =>
-        node as JsonObject ?? throw new ResponseFieldException(path);
-
-    public static JsonNode Required(JsonObject json, string key, string path) =>
-        json.TryGetPropertyValue(key, out var node) && node is not null ? node : throw new ResponseFieldException(Join(path, key));
-
-    public static string String(JsonObject json, string key, string path) =>
-        JsonContent.AsString(Required(json, key, path)) ?? throw new ResponseFieldException(Join(path, key));
-
-    public static double Number(JsonObject json, string key, string path) =>
-        JsonContent.AsDouble(Required(json, key, path)) ?? throw new ResponseFieldException(Join(path, key));
-
-    public static long? OptionalInteger(JsonObject json, string key, string path)
-    {
-        if (!json.TryGetPropertyValue(key, out var node) || node is null) return null;
-        if (node is JsonValue value && value.TryGetValue<long>(out var integer)) return integer;
-        var number = JsonContent.AsDouble(node);
-        if (number is { } d && Math.Floor(d) == d) return (long)d;
-        throw new ResponseFieldException(Join(path, key));
-    }
-
-    public static Dictionary<string, double> NumberMap(JsonObject json, string path)
-    {
-        var map = new Dictionary<string, double>();
-        foreach (var (key, node) in json)
-            map[key] = JsonContent.AsDouble(node) ?? throw new ResponseFieldException(Join(path, key));
-        return map;
-    }
-
-    public static Dictionary<int, double> ScoreMap(JsonObject json, string path)
-    {
-        var map = new Dictionary<int, double>();
-        foreach (var (key, node) in json)
-            map[ScoreKey(key, path)] = JsonContent.AsDouble(node) ?? throw new ResponseFieldException(Join(path, key));
-        return map;
-    }
-
-    public static Dictionary<int, JsonNode?> Legend(JsonObject json, string path)
-    {
-        var map = new Dictionary<int, JsonNode?>();
-        foreach (var (key, node) in json) map[ScoreKey(key, path)] = node?.DeepClone();
-        return map;
-    }
-
-    private static int ScoreKey(string key, string path) =>
-        int.TryParse(key, NumberStyles.Integer, CultureInfo.InvariantCulture, out var score)
-            ? score
-            : throw new ResponseFieldException(Join(path, key));
+    /// <summary>Project a decoded <c>GET /v1/models</c> body.</summary>
+    /// <param name="body">The body decoded by <c>TypeSafeJsonContext</c>.</param>
+    internal static ListModelsResponse FromBody(ModelList body) => new(body.Models);
 }

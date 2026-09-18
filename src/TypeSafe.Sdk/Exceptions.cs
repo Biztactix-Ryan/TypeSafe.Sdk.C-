@@ -18,31 +18,31 @@ public class TypeSafeException : Exception
 public class TypeSafeApiException : TypeSafeException
 {
     /// <summary>Describe an HTTP failure, deriving the message from the body unless one is supplied.</summary>
-    /// <param name="status">HTTP response status code.</param>
+    /// <param name="statusCode">HTTP response status code.</param>
     /// <param name="body">The parsed JSON body, a string node for plain text, or <c>null</c> for an empty body.</param>
     /// <param name="headers">HTTP response headers.</param>
     /// <param name="message">Optional message override; when omitted, a message is extracted from the body.</param>
     /// <param name="endpoint">The request method and URL, when available.</param>
     public TypeSafeApiException(
-        int status,
+        HttpStatusCode statusCode,
         JsonNode? body,
         IReadOnlyDictionary<string, string>? headers = null,
         string? message = null,
         string? endpoint = null)
-        : this(status, body, HeaderSnapshot.Copy(headers), message ?? Describe(body), endpoint, isDetail: true)
+        : this(statusCode, body, HeaderSnapshot.Copy(headers), message ?? Describe(body), endpoint, isDetail: true)
     {
     }
 
     private TypeSafeApiException(
-        int status,
+        HttpStatusCode statusCode,
         JsonNode? body,
         IReadOnlyDictionary<string, string> headers,
         string detail,
         string? endpoint,
         bool isDetail)
-        : base(Format(status, detail, endpoint, HeaderSnapshot.RequestId(headers)))
+        : base(Format(statusCode, detail, endpoint, HeaderSnapshot.RequestId(headers)))
     {
-        Status = status;
+        StatusCode = statusCode;
         Body = body;
         Headers = headers;
         Endpoint = endpoint;
@@ -50,10 +50,7 @@ public class TypeSafeApiException : TypeSafeException
     }
 
     /// <summary>HTTP response status code.</summary>
-    public int Status { get; }
-
-    /// <summary>HTTP response status code as an enum.</summary>
-    public HttpStatusCode StatusCode => (HttpStatusCode)Status;
+    public HttpStatusCode StatusCode { get; }
 
     /// <summary>The server's JSON error body, a string node for plain text, or <c>null</c> for an empty body.</summary>
     public JsonNode? Body { get; }
@@ -72,26 +69,27 @@ public class TypeSafeApiException : TypeSafeException
 
     /// <summary>Create the exception subclass matching an HTTP status code.</summary>
     public static TypeSafeApiException FromResponse(
-        int status,
+        HttpStatusCode statusCode,
         JsonNode? body,
         IReadOnlyDictionary<string, string>? headers = null,
         string? endpoint = null)
     {
-        return status switch
+        return statusCode switch
         {
-            400 => new TypeSafeBadRequestException(status, body, headers, endpoint: endpoint),
-            401 => new TypeSafeAuthenticationException(status, body, headers, endpoint: endpoint),
-            403 => new TypeSafePermissionDeniedException(status, body, headers, endpoint: endpoint),
-            404 => new TypeSafeNotFoundException(status, body, headers, endpoint: endpoint),
-            422 => new TypeSafeUnprocessableEntityException(status, body, headers, endpoint: endpoint),
-            429 => new TypeSafeRateLimitException(status, body, headers, endpoint: endpoint),
-            >= 500 => new TypeSafeInternalServerException(status, body, headers, endpoint: endpoint),
-            _ => new TypeSafeApiException(status, body, headers, endpoint: endpoint),
+            HttpStatusCode.BadRequest => new TypeSafeBadRequestException(statusCode, body, headers, endpoint: endpoint),
+            HttpStatusCode.Unauthorized => new TypeSafeAuthenticationException(statusCode, body, headers, endpoint: endpoint),
+            HttpStatusCode.Forbidden => new TypeSafePermissionDeniedException(statusCode, body, headers, endpoint: endpoint),
+            HttpStatusCode.NotFound => new TypeSafeNotFoundException(statusCode, body, headers, endpoint: endpoint),
+            HttpStatusCode.UnprocessableEntity => new TypeSafeUnprocessableEntityException(statusCode, body, headers, endpoint: endpoint),
+            HttpStatusCode.TooManyRequests => new TypeSafeRateLimitException(statusCode, body, headers, endpoint: endpoint),
+            >= HttpStatusCode.InternalServerError => new TypeSafeInternalServerException(statusCode, body, headers, endpoint: endpoint),
+            _ => new TypeSafeApiException(statusCode, body, headers, endpoint: endpoint),
         };
     }
 
-    private static string Format(int status, string detail, string? endpoint, string? requestId)
+    private static string Format(HttpStatusCode statusCode, string detail, string? endpoint, string? requestId)
     {
+        var status = (int)statusCode;
         var message = detail.Length > 0 ? $"{status} {detail}" : status.ToString();
         if (endpoint is not null) message = $"{endpoint}: {message}";
         if (requestId is not null) message += $" (request_id={requestId})";
@@ -157,49 +155,49 @@ public class TypeSafeApiException : TypeSafeException
 /// <summary>HTTP 400: the request was invalid.</summary>
 public class TypeSafeBadRequestException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeBadRequestException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeBadRequestException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>HTTP 401: authentication failed.</summary>
 public class TypeSafeAuthenticationException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeAuthenticationException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeAuthenticationException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>HTTP 403: access was denied.</summary>
 public class TypeSafePermissionDeniedException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafePermissionDeniedException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafePermissionDeniedException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>HTTP 404: the resource was not found.</summary>
 public class TypeSafeNotFoundException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeNotFoundException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeNotFoundException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>HTTP 422: the request failed server validation.</summary>
 public class TypeSafeUnprocessableEntityException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeUnprocessableEntityException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeUnprocessableEntityException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>HTTP 429: the rate limit was exceeded.</summary>
 public class TypeSafeRateLimitException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeRateLimitException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint)
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeRateLimitException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint)
     {
         RetryAfter = RetryAfterParser.Parse(Headers);
     }
@@ -211,17 +209,17 @@ public class TypeSafeRateLimitException : TypeSafeApiException
 /// <summary>HTTP 5xx: the server failed to process the request.</summary>
 public class TypeSafeInternalServerException : TypeSafeApiException
 {
-    /// <inheritdoc cref="TypeSafeApiException(int, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
-    public TypeSafeInternalServerException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
-        : base(status, body, headers, message, endpoint) { }
+    /// <inheritdoc cref="TypeSafeApiException(HttpStatusCode, JsonNode?, IReadOnlyDictionary{string, string}?, string?, string?)"/>
+    public TypeSafeInternalServerException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers = null, string? message = null, string? endpoint = null)
+        : base(statusCode, body, headers, message, endpoint) { }
 }
 
 /// <summary>A successful HTTP response whose body was missing or structurally invalid required data.</summary>
 public class TypeSafeApiResponseValidationException : TypeSafeApiException
 {
     /// <summary>Describe an unparseable response, naming the first missing or structurally invalid field.</summary>
-    public TypeSafeApiResponseValidationException(int status, JsonNode? body, IReadOnlyDictionary<string, string>? headers, string fieldPath, string? endpoint = null)
-        : base(status, body, headers, $"Invalid response data at '{fieldPath}'.", endpoint)
+    public TypeSafeApiResponseValidationException(HttpStatusCode statusCode, JsonNode? body, IReadOnlyDictionary<string, string>? headers, string fieldPath, string? endpoint = null)
+        : base(statusCode, body, headers, $"Invalid response data at '{fieldPath}'.", endpoint)
     {
         FieldPath = fieldPath;
     }

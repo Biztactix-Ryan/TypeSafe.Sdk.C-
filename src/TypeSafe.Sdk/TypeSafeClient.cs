@@ -8,16 +8,20 @@ namespace TypeSafe;
 public sealed class SystemOneRequest
 {
     /// <summary>Create a request.</summary>
-    /// <param name="state">Text, a JSON object, or an array to evaluate. Plain .NET objects are serialized with camelCase web defaults.</param>
+    /// <param name="state">
+    /// Text, a JSON object, or an array to evaluate: a <see cref="string"/>, <see cref="JsonObject"/>, or
+    /// <see cref="JsonArray"/> converts implicitly, and the default <see cref="Content"/> sends no state.
+    /// Pass any other object through <see cref="Content.From(object?)"/>.
+    /// </param>
     /// <param name="questions">Nonempty questions keyed by the names used to identify their answers.</param>
-    public SystemOneRequest(object? state, IEnumerable<KeyValuePair<string, Question>> questions)
+    public SystemOneRequest(Content state, IEnumerable<KeyValuePair<string, Question>> questions)
     {
         State = state;
         Questions = questions ?? throw new ArgumentNullException(nameof(questions));
     }
 
     /// <summary>Text, a JSON object, or an array to evaluate. See <see href="https://docs.typesafe.ai/concepts/state">state</see>.</summary>
-    public object? State { get; }
+    public Content State { get; }
 
     /// <summary>Questions keyed by the names used to identify their answers.</summary>
     public IEnumerable<KeyValuePair<string, Question>> Questions { get; }
@@ -40,7 +44,7 @@ public interface ITypeSafeClient : IDisposable
 
     /// <summary>Answer named questions about text or structured state.</summary>
     Task<SystemOneResponse> SystemOneAsync(
-        object? state,
+        Content state,
         IEnumerable<KeyValuePair<string, Question>> questions,
         string? model = null,
         RequestOptions? options = null,
@@ -67,7 +71,7 @@ public interface IModelsResource
 /// <code>
 /// using var client = new TypeSafeClient();
 /// var response = await client.SystemOneAsync(
-///     state: new { document = "I was charged twice. Please fix this ASAP." },
+///     state: Content.From(new { document = "I was charged twice. Please fix this ASAP." }),
 ///     questions: new Questions
 ///     {
 ///         ["category"] = Question.Choice("What is this ticket about?", "billing", "technical", "other"),
@@ -157,7 +161,12 @@ public sealed class TypeSafeClient : ITypeSafeClient
     /// Answer named questions about text or structured state.
     /// See <see href="https://docs.typesafe.ai/concepts/system-one">System One</see> for details.
     /// </summary>
-    /// <param name="state">Text, a JSON object, or an array to evaluate. Plain .NET objects are serialized with camelCase web defaults; pass a <see cref="JsonNode"/> to control serialization.</param>
+    /// <param name="state">
+    /// Text, a JSON object, or an array to evaluate: a <see cref="string"/>, <see cref="JsonObject"/>, or
+    /// <see cref="JsonArray"/> converts implicitly, and the default <see cref="Content"/> sends no state.
+    /// Plain .NET objects go through <see cref="Content.From(object?)"/>, which serializes them with
+    /// camelCase web defaults, or <see cref="Content.From{T}(T, System.Text.Json.Serialization.Metadata.JsonTypeInfo{T})"/>.
+    /// </param>
     /// <param name="questions">Nonempty questions keyed by the names used to identify their answers.</param>
     /// <param name="model">Model override; <c>null</c> inherits <see cref="DefaultModel"/>.</param>
     /// <param name="options">Per-call timeout, retry, and header overrides.</param>
@@ -168,7 +177,7 @@ public sealed class TypeSafeClient : ITypeSafeClient
     /// <exception cref="TypeSafeApiConnectionException">The request cannot connect or times out after any retries.</exception>
     /// <exception cref="OperationCanceledException">The caller cancels the request.</exception>
     public Task<SystemOneResponse> SystemOneAsync(
-        object? state,
+        Content state,
         IEnumerable<KeyValuePair<string, Question>> questions,
         string? model = null,
         RequestOptions? options = null,
@@ -177,7 +186,7 @@ public sealed class TypeSafeClient : ITypeSafeClient
         return SystemOneAsync(new SystemOneRequest(state, questions) { Model = model }, options, cancellationToken);
     }
 
-    /// <inheritdoc cref="SystemOneAsync(object?, IEnumerable{KeyValuePair{string, Question}}, string?, RequestOptions?, CancellationToken)"/>
+    /// <inheritdoc cref="SystemOneAsync(Content, IEnumerable{KeyValuePair{string, Question}}, string?, RequestOptions?, CancellationToken)"/>
     public Task<SystemOneResponse> SystemOneAsync(
         SystemOneRequest request,
         RequestOptions? options = null,
@@ -188,7 +197,7 @@ public sealed class TypeSafeClient : ITypeSafeClient
 
         var body = new JsonObject
         {
-            ["state"] = JsonContent.From(request.State),
+            ["state"] = request.State.Node?.DeepClone(),
             ["model"] = request.Model ?? DefaultModel,
             ["questions"] = Question.Normalize(request.Questions),
         };
@@ -203,7 +212,8 @@ public sealed class TypeSafeClient : ITypeSafeClient
             Protocol.SystemOnePath,
             body,
             options,
-            parsed => SystemOneResponse.Parse(parsed, log.Warn),
+            TypeSafeJsonContext.Default.SystemOneBody,
+            decoded => SystemOneResponse.FromBody(decoded, log.Warn),
             cancellationToken);
     }
 

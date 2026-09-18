@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -6,16 +7,29 @@ namespace TypeSafe.Internal;
 /// <summary>Conversion of user-supplied values into JSON nodes, and lenient response decoding.</summary>
 internal static class JsonContent
 {
-    /// <summary>Options used when converting plain .NET objects (POCOs, anonymous types, dictionaries) into JSON.</summary>
-    public static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// Options used when converting plain .NET objects (POCOs, anonymous types, dictionaries) into JSON.
+    /// Reading them pulls in the reflection-based contract resolver, so the getter is annotated like the
+    /// conversion that uses it.
+    /// </summary>
+    public static JsonSerializerOptions SerializerOptions
+    {
+        [RequiresUnreferencedCode(ReflectionMessage)]
+        [RequiresDynamicCode(ReflectionMessage)]
+        get => JsonSerializerOptions.Web;
+    }
 
-    private static readonly JsonSerializerOptions CompactOptions = new() { WriteIndented = false };
+    /// <summary>Shared warning text for the reflection-based conversion path.</summary>
+    internal const string ReflectionMessage =
+        "Reflection-based serialization is not trim or AOT safe; use Content.From<T>(T, JsonTypeInfo<T>) with a JsonSerializerContext instead.";
 
     /// <summary>
     /// Convert a value to a JSON node. <see cref="JsonNode"/> instances pass through (cloned when already
     /// attached to a parent), strings become string values, and any other object is serialized with
     /// web defaults (camelCase property names).
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionMessage)]
+    [RequiresDynamicCode(ReflectionMessage)]
     public static JsonNode? From(object? value)
     {
         switch (value)
@@ -45,12 +59,6 @@ internal static class JsonContent
     /// <summary>The string content of a string value node, or <c>null</c> for any other node.</summary>
     public static string? AsString(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
-
-    /// <summary>The numeric content of a number node, or <c>null</c> for any other node.</summary>
-    public static double? AsDouble(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue<double>(out var number) && double.IsFinite(number) ? number : null;
-
-    public static string Serialize(JsonNode node) => node.ToJsonString(CompactOptions);
 
     /// <summary>
     /// Decode a response body leniently: valid JSON becomes a node tree, any other text becomes a

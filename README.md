@@ -4,7 +4,17 @@ C# SDK for [TypeSafe AI](https://typesafe.ai), ported from the official
 [Python](https://github.com/typesafe-ai/typesafe-sdk-python) and
 [JavaScript](https://github.com/typesafe-ai/typesafe-sdk-js) SDKs (v0.6.0).
 
-Targets .NET 8 and later. The only dependency is `Microsoft.Extensions.Logging.Abstractions`.
+## Requirements
+
+- Targets `net10.0`, so consuming projects need the .NET 10 runtime (and the .NET 10 SDK to build
+  from source). Earlier targets are not multi-targeted.
+- The only dependency is `Microsoft.Extensions.Logging.Abstractions`.
+- The library is built with `IsAotCompatible`, so it is marked trimmable and ships clean under
+  `PublishTrimmed` and `PublishAot`. All JSON goes through a source-generated serializer context; the
+  one reflection path is the `Content.From(object?)` overload described under
+  [Content](#content), which is annotated so your call site — not the runtime — tells you about it.
+
+If you are still on .NET 8, stay on version 0.6.0 — it is the last release that targets `net8.0`.
 
 ## About this repository
 
@@ -28,7 +38,7 @@ using TypeSafe;
 using var client = new TypeSafeClient();
 
 var response = await client.SystemOneAsync(
-    state: new { document = "I was charged twice. Please fix this ASAP." },
+    state: Content.From(new { document = "I was charged twice. Please fix this ASAP." }),
     questions: new Questions
     {
         ["category"] = Question.Choice("What is this ticket about?", "billing", "technical", "other"),
@@ -40,11 +50,55 @@ Console.WriteLine(response.Choices["category"].Choice);
 Answers are grouped by question type: `response.Nouls`, `response.Choices`, and
 `response.Scores`, or all together in `response.Answers`.
 
+## Content
+
+The request state and every question instruction and description is a `Content` value. Three inputs
+convert implicitly — a `string`, a `JsonObject`, and a `JsonArray` — and `Content.Null` (the default
+value) leaves the content unset:
+
+```csharp
+await client.SystemOneAsync("I was charged twice.", questions);
+await client.SystemOneAsync(new JsonObject { ["document"] = "I was charged twice." }, questions);
+await client.SystemOneAsync(new JsonArray { "I was charged twice.", "Any update?" }, questions);
+await client.SystemOneAsync(Content.Null, questions);
+```
+
+Anything else is converted explicitly. `Content.From(object?)` takes any .NET value — anonymous
+types, records, dictionaries — and serializes it by reflection with `System.Text.Json` web defaults,
+so property names are camelCased (`PriorityLevel` becomes `priorityLevel`):
+
+```csharp
+var state = Content.From(new { subject = "Charged twice", priorityLevel = 2 });
+```
+
+That overload reflects over the type, so it is annotated with `RequiresUnreferencedCode` and
+`RequiresDynamicCode`: in a trimmed or native AOT app the call site reports `IL2026` and `IL3050` at
+build time instead of failing at run time. There, and anywhere the shape of the state is known, use
+`Content.From<T>(T, JsonTypeInfo<T>)` with a source-generated `JsonSerializerContext`. Property
+naming then follows that context's options rather than the SDK's camelCase default:
+
+```csharp
+using System.Text.Json.Serialization;
+using TypeSafe;
+
+public record Ticket(string Subject, string Body);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(Ticket))]
+public partial class AppJsonContext : JsonSerializerContext;
+
+var ticket = new Ticket("Charged twice this month", "Two charges of $49 on one account.");
+
+var response = await client.SystemOneAsync(
+    state: Content.From(ticket, AppJsonContext.Default.Ticket),
+    questions: questions);
+```
+
 ## Questions
 
-Build questions with the static factories on `Question`. Instructions and descriptions accept text,
-a JSON object, or an array. Plain .NET objects (anonymous types, records, dictionaries) are serialized
-with camelCase web defaults; pass a `JsonNode` to control serialization yourself.
+Build questions with the static factories on `Question`. Instructions and descriptions are
+[`Content`](#content), so text, a `JsonObject`, and a `JsonArray` convert implicitly and
+`Content.Null` leaves one unset.
 
 ```csharp
 var questions = new Questions
@@ -54,10 +108,10 @@ var questions = new Questions
 
     // Select between labels, undescribed or described.
     ["tone"] = Question.Choice("What is the customer's tone?", "calm", "frustrated", "angry"),
-    ["tier"] = Question.Choice("Which plan?", new Dictionary<string, string?>
+    ["tier"] = Question.Choice("Which plan?", new Dictionary<string, Content>
     {
         ["free"] = "no payment on file",
-        ["pro"] = null,
+        ["pro"] = Content.Null,
     }),
 
     // Ordered rubric, one description per score from zero.
@@ -71,6 +125,16 @@ var questions = new Questions
 ## Responses
 
 ```csharp
+var billing = response.Nouls["isBilling"];
+billing.Noul;             // 0.93
+billing.Probability;      // the same value, under a .NET-style name
+
+var tone = response.Choices["tone"];
+tone.Choice;              // "frustrated"
+tone.Label;               // the same value, under a .NET-style name
+tone.Confidence;
+tone.Probabilities["angry"];
+
 var urgency = response.Scores["urgency"];
 urgency.Score;            // expected score, e.g. 2.4
 urgency.Confidence;
@@ -88,16 +152,21 @@ available through `RawHttpResponse`.
 
 ## Models
 
+`ListModelsResponse` is an `IReadOnlyList<ModelMetadata>`, so enumerate or index the response itself.
+
 ```csharp
 var models = await client.Models.ListAsync();
-foreach (var model in models.Models)
+foreach (var model in models)
     Console.WriteLine($"{model.Name}: {model.Description} ({model.ReleaseDate})");
+
+Console.WriteLine($"{models.Count} models; first is {models[0].Name}");
 ```
 
 ## Configuration
 
 Explicit options take precedence over environment variables, then SDK defaults. Empty or
-whitespace-only environment values are ignored.
+whitespace-only environment values are ignored. `TypeSafeClientOptions` properties are `init`-only,
+so set them in the object initializer; the client reads them once, while it is being constructed.
 
 | Option           | Environment variable     | Default                   |
 | ---------------- | ------------------------ | ------------------------- |
@@ -140,7 +209,7 @@ be overridden.
 
 `RetryPolicy` mirrors the other SDKs: two retries by default with exponential backoff from 500ms
 to 5s and 25% jitter, honouring `Retry-After` and `retry-after-ms` up to 60s. Retried failures are
-HTTP 408, 429, and 5xx responses, connection errors, and timeouts. `Predicate` adds custom rules,
+HTTP 408, 429, and 5xx responses, connection errors, and timeouts. `RetryWhen` adds custom rules,
 `TotalTimeout` caps the whole call, and `RetryPolicy.None` disables retries.
 
 ### Logging
@@ -154,7 +223,7 @@ Credential headers are redacted; bodies are not.
 | Exception                                | When                                                     |
 | ---------------------------------------- | -------------------------------------------------------- |
 | `TypeSafeException`                      | Base type; also invalid configuration or questions       |
-| `TypeSafeApiException`                   | Any non-2xx response: `Status`, `Body`, `Headers`, `RequestId` |
+| `TypeSafeApiException`                   | Any non-2xx response: `StatusCode`, `Body`, `Headers`, `RequestId` |
 | `TypeSafeBadRequestException`            | 400                                                      |
 | `TypeSafeAuthenticationException`        | 401                                                      |
 | `TypeSafePermissionDeniedException`      | 403                                                      |
@@ -178,7 +247,7 @@ catch (TypeSafeRateLimitException error) when (error.RetryAfter is { } wait)
 }
 catch (TypeSafeApiException error)
 {
-    Console.Error.WriteLine($"{error.Status} {error.Detail} (request {error.RequestId})");
+    Console.Error.WriteLine($"{(int)error.StatusCode} {error.Detail} (request {error.RequestId})");
 }
 ```
 
@@ -190,6 +259,8 @@ has a public constructor. To exercise the real client without the network, pass 
 
 ## Development
 
+Requires the .NET 10 SDK.
+
 ```sh
 dotnet build
 dotnet test
@@ -200,9 +271,19 @@ TYPESAFE_API_KEY=... dotnet run --project examples/TypeSafe.Sdk.Demo
 
 - The API is async only (`SystemOneAsync`, `Models.ListAsync`) with `CancellationToken` support; there is no synchronous client.
 - Answers are grouped like the Python SDK (`Nouls`, `Choices`, `Scores`). The JavaScript SDK's compile-time inference of answer types from question keys has no C# equivalent.
+- The wire answer names are kept (`NoulAnswer.Noul`, `ChoiceAnswer.Choice`) and joined by the get-only aliases `NoulAnswer.Probability` and `ChoiceAnswer.Label`. The aliases are computed, so they add nothing to the wire format.
+- `ListModelsResponse` implements `IReadOnlyList<ModelMetadata>`: the response is enumerated and indexed directly, where the Python and JavaScript SDKs read a `models` collection off it. There is no `Models` property.
 - Caller cancellation surfaces as the standard `OperationCanceledException` rather than a dedicated abort error.
 - `RetryPolicy.TotalTimeout` (the Python SDK's retry budget) is available but disabled by default, matching the JavaScript SDK.
+- `RetryPolicy`'s retry switches are named as actions (`RetryConnectionErrors`, `RetryTimeouts`, `RetryWhen`) rather than after the upstream error types; the behaviour they control is unchanged.
+- HTTP status codes are typed: responses and API exceptions expose `StatusCode` as a `System.Net.HttpStatusCode` instead of the upstream integer `status`. Exception messages still carry the numeric code, and `RetryPolicy.HttpStatuses` remains a set of `int`.
+- `TypeSafeClientOptions`, `RequestOptions`, and `RetryPolicy` are set once through `init` setters, where the Python and JavaScript SDKs take mutable option objects or keyword arguments.
+- The request state and question instructions and descriptions are a typed `Content` value rather than the untyped values the Python and JavaScript SDKs accept: `string`, `JsonObject`, and `JsonArray` convert implicitly, `Content.Null` leaves a value unset, and any other object is passed explicitly through `Content.From(obj)` or `Content.From(value, typeInfo)`. This covers `SystemOneAsync(state, ...)` and `SystemOneRequest.State` as well as the `Question` builders. The wire format is unchanged.
 - A supplied `HttpClient` is not disposed with the client unless `DisposeHttpClient` is set.
+- An answer whose `type` this SDK version does not model is kept, not skipped: it arrives in `Answers` as a bare `Answer` whose `AdditionalProperties` holds the whole payload, the `type` discriminator included, and it is excluded from `Nouls`, `Choices` and `Scores`. A warning is still logged for it (`Ignoring answer "<name>" with unrecognized type "<type>"`), matching the Python SDK's message, but the Python SDK discards the answer where this SDK leaves it inspectable — through `AdditionalProperties` or the buffered `RawHttpResponse`.
+- `TypeSafeApiResponseValidationException.FieldPath` is the JSON path the reader was on, with the leading `$.` removed: `answers.tone.confidence` for a value of the wrong type, `models[0]` for a list position, `answers.tone` for an answer missing a required member (the reader blames the object it could not build), and `""` for the whole body. The Python and JavaScript SDKs report their validator's own path for the same defect.
+- The package targets `net10.0` only, where the Python and JavaScript SDKs support a range of
+  runtimes. .NET 8 consumers must stay on 0.6.0, the last `net8.0` release.
 
 ## Documentation
 
