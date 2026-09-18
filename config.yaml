@@ -1,0 +1,15 @@
+activity_log_max_bytes: null
+activity_log_max_days: null
+auto_commit: false
+deploy_branch: null
+description: ''
+name: TypeSafe.Sdk
+next_epic_id: 8
+next_sprint_id: 1
+next_story_id: 26
+prefix: TSDK
+repo: ''
+stale_claim_hours: 2.0
+tools:
+  maintenance: false
+  web: false
