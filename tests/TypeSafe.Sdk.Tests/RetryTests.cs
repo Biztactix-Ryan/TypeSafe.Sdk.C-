@@ -1,3 +1,4 @@
+using System.Net;
 using TypeSafe.Internal;
 
 namespace TypeSafe.Tests;
@@ -77,7 +78,7 @@ public class RetryTests
     public async Task ConnectionAndTimeoutRetriesCanBeDisabled()
     {
         var connection = new StubHandler((_, _, _) => throw new HttpRequestException("reset"));
-        using var noConnectionRetry = Clients.Create(connection, o => o.Retry = Clients.FastRetry with { ApiConnectionError = false });
+        using var noConnectionRetry = Clients.Create(connection, o => o.Retry = Clients.FastRetry with { RetryConnectionErrors = false });
         await Assert.ThrowsAsync<TypeSafeApiConnectionException>(() => noConnectionRetry.SystemOneAsync("x", Clients.SampleQuestions()));
         Assert.Single(connection.Requests);
 
@@ -89,7 +90,7 @@ public class RetryTests
         using var noTimeoutRetry = Clients.Create(slow, o =>
         {
             o.Timeout = TimeSpan.FromMilliseconds(20);
-            o.Retry = Clients.FastRetry with { ApiTimeoutError = false };
+            o.Retry = Clients.FastRetry with { RetryTimeouts = false };
         });
         await Assert.ThrowsAsync<TypeSafeApiTimeoutException>(() => noTimeoutRetry.SystemOneAsync("x", Clients.SampleQuestions()));
         Assert.Single(slow.Requests);
@@ -122,7 +123,7 @@ public class RetryTests
     }
 
     [Fact]
-    public async Task CustomStatusSetAndPredicateExtendRetries()
+    public async Task CustomStatusSetAndRetryWhenExtendRetries()
     {
         var handler = new StubHandler((_, attempt) => attempt == 0 ? Http.Json(404, "{}") : Http.Json(200, Http.SystemOneBody));
         using var statuses = Clients.Create(handler, o => o.Retry = Clients.FastRetry with { HttpStatuses = new HashSet<int> { 404 } });
@@ -130,12 +131,12 @@ public class RetryTests
         Assert.Equal(2, handler.Requests.Count);
 
         handler.Requests.Clear();
-        using var predicate = Clients.Create(handler, o => o.Retry = Clients.FastRetry with
+        using var retryWhen = Clients.Create(handler, o => o.Retry = Clients.FastRetry with
         {
             HttpStatuses = new HashSet<int>(),
-            Predicate = error => error is TypeSafeNotFoundException,
+            RetryWhen = error => error is TypeSafeNotFoundException,
         });
-        await predicate.SystemOneAsync("x", Clients.SampleQuestions());
+        await retryWhen.SystemOneAsync("x", Clients.SampleQuestions());
         Assert.Equal(2, handler.Requests.Count);
     }
 
@@ -150,7 +151,7 @@ public class RetryTests
         });
 
         var error = await Assert.ThrowsAsync<TypeSafeInternalServerException>(() => client.SystemOneAsync("x", Clients.SampleQuestions()));
-        Assert.Equal(500, error.Status);
+        Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
         Assert.Single(handler.Requests);
     }
 

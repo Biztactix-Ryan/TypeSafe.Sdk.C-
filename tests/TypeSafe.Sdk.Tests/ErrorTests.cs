@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json.Nodes;
 
 namespace TypeSafe.Tests;
@@ -24,9 +25,8 @@ public class ErrorTests
     {
         var error = await Fail(Http.Json(status, """{"error":"nope"}"""));
         Assert.IsType(expected, error);
-        Assert.Equal(status, error.Status);
         Assert.Equal("nope", error.Detail);
-        Assert.Equal((System.Net.HttpStatusCode)status, error.StatusCode);
+        Assert.Equal((HttpStatusCode)status, error.StatusCode);
     }
 
     [Fact]
@@ -186,13 +186,14 @@ public class ErrorTests
     [Fact]
     public void ExceptionsCanBeConstructedDirectly()
     {
-        var error = TypeSafeApiException.FromResponse(404, JsonNode.Parse("""{"error":"missing"}"""));
+        var error = TypeSafeApiException.FromResponse(HttpStatusCode.NotFound, JsonNode.Parse("""{"error":"missing"}"""));
         Assert.IsType<TypeSafeNotFoundException>(error);
         Assert.Equal("404 missing", error.Message);
+        Assert.Equal(HttpStatusCode.NotFound, error.StatusCode);
         Assert.Null(error.RequestId);
         Assert.Empty(error.Headers);
 
-        var custom = new TypeSafeApiException(400, null, message: "custom");
+        var custom = new TypeSafeApiException(HttpStatusCode.BadRequest, null, message: "custom");
         Assert.Equal("400 custom", custom.Message);
         Assert.Equal("custom", custom.Detail);
     }

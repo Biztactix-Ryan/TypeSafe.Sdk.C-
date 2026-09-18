@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 
 namespace TypeSafe.Internal;
 
@@ -40,13 +42,25 @@ internal sealed class Transport
     public SdkLog Log => _log;
 
     /// <summary>Send a JSON request with retries and decode the successful response.</summary>
-    public async Task<TResponse> SendAsync<TResponse>(
+    /// <param name="method">HTTP method.</param>
+    /// <param name="path">Path appended to the base URL.</param>
+    /// <param name="body">
+    /// Request body, or <c>null</c> for a bodyless request. It is written verbatim through the
+    /// source-generated <see cref="JsonObject"/> metadata, so the caller's key order is the wire order.
+    /// </param>
+    /// <param name="options">Per-call overrides.</param>
+    /// <param name="bodyType">Source-generated metadata for the success body, which is read with no reflection.</param>
+    /// <param name="project">Projects a decoded body onto the public response type.</param>
+    /// <param name="cancellationToken">Cancels the request and any pending retry.</param>
+    public async Task<TResponse> SendAsync<TBody, TResponse>(
         HttpMethod method,
         string path,
-        JsonNode? body,
+        JsonObject? body,
         RequestOptions? options,
-        Func<JsonNode?, TResponse> parse,
+        JsonTypeInfo<TBody> bodyType,
+        Func<TBody, TResponse> project,
         CancellationToken cancellationToken)
+        where TBody : class
         where TResponse : ApiResponse
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -55,7 +69,7 @@ internal sealed class Transport
         var timeout = options?.Timeout is { } perCall ? TypeSafeClient.ValidateTimeout(perCall) : _timeout;
         var policy = options?.Retry is { } perCallPolicy ? perCallPolicy.Validate() : _retry;
         var headers = BuildHeaders(options?.Headers, body is not null);
-        var content = body is null ? null : JsonContent.Serialize(body);
+        var content = body is null ? null : JsonSerializer.Serialize(body, TypeSafeJsonContext.Default.JsonObject);
         // Numbered so concurrent requests, and the attempts within one, can be told apart in the logs.
         var tag = $"#{Interlocked.Increment(ref _requestCount)} {method} {path}";
         var started = Stopwatch.GetTimestamp();
@@ -87,7 +101,8 @@ internal sealed class Transport
 
             var responseHeaders = HeaderSnapshot.From(response);
             var requestId = HeaderSnapshot.RequestId(responseHeaders);
-            var status = (int)response.StatusCode;
+            var statusCode = response.StatusCode;
+            var status = (int)statusCode;
             _log.Info($"{tag} <- {status} in {Elapsed(attemptStarted)}{(requestId is null ? "" : $" (request {requestId})")}");
 
             string? text;
@@ -104,7 +119,6 @@ internal sealed class Transport
                 continue;
             }
 
-            var parsedBody = JsonContent.ParseLenient(text);
             if (_log.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
                 _log.Debug($"{tag} <- headers={Redaction.Describe(responseHeaders)} body={text}");
 
@@ -113,18 +127,21 @@ internal sealed class Transport
             {
                 try
                 {
-                    var result = parse(parsedBody);
+                    var result = project(Decode(text, bodyType));
                     result.Attach(response, responseHeaders);
                     return result;
                 }
-                catch (ResponseFieldException error)
+                catch (JsonException error)
                 {
-                    failure = new TypeSafeApiResponseValidationException(status, parsedBody, responseHeaders, error.FieldPath, endpoint);
+                    // The body is still reported the way an error body is: leniently decoded, or a
+                    // string node when it was not JSON at all.
+                    failure = new TypeSafeApiResponseValidationException(
+                        statusCode, JsonContent.ParseLenient(text), responseHeaders, FieldPath(error.Path), endpoint);
                 }
             }
             else
             {
-                failure = TypeSafeApiException.FromResponse(status, parsedBody, responseHeaders, endpoint);
+                failure = TypeSafeApiException.FromResponse(statusCode, JsonContent.ParseLenient(text), responseHeaders, endpoint);
             }
 
             response.Dispose();
@@ -132,6 +149,29 @@ internal sealed class Transport
             await BackOffAsync(tag, attempt, retriesLeft, status.ToString(), responseHeaders, policy, started, failure, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Deserialize a success body through the source-generated context. An absent, empty or literal
+    /// <c>null</c> body is as unusable as a malformed one, so it is reported the same way.
+    /// </summary>
+    private static TBody Decode<TBody>(string? text, JsonTypeInfo<TBody> bodyType) where TBody : class
+    {
+        var decoded = string.IsNullOrEmpty(text) ? null : JsonSerializer.Deserialize(text, bodyType);
+        return decoded ?? throw new JsonException("The response body was empty.");
+    }
+
+    /// <summary>
+    /// Translate a <see cref="JsonException.Path"/> (<c>$.answers.tone.confidence</c>) into an SDK
+    /// field path (<c>answers.tone.confidence</c>); the root, and an exception with no path at all,
+    /// become the empty string.
+    /// </summary>
+    private static string FieldPath(string? jsonPath) => jsonPath switch
+    {
+        null or "" or "$" => "",
+        var path when path.StartsWith("$.", StringComparison.Ordinal) => path[2..],
+        var path when path.StartsWith('$') => path[1..],
+        var path => path,
+    };
 
     /// <summary>Merge default and per-call headers case-insensitively (last wins), then apply the protected SDK headers.</summary>
     private Dictionary<string, string> BuildHeaders(IEnumerable<KeyValuePair<string, string>>? perCall, bool hasBody)

@@ -49,13 +49,13 @@ public sealed record RetryPolicy
     public TimeSpan MaxRetryAfter { get; init; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Whether to retry <see cref="TypeSafeApiConnectionException"/>, including interrupted response bodies. Default: true.</summary>
-    public bool ApiConnectionError { get; init; } = true;
+    public bool RetryConnectionErrors { get; init; } = true;
 
     /// <summary>Whether to retry <see cref="TypeSafeApiTimeoutException"/>. Default: true.</summary>
-    public bool ApiTimeoutError { get; init; } = true;
+    public bool RetryTimeouts { get; init; } = true;
 
     /// <summary>An optional predicate called with the raised exception; returning <c>true</c> triggers a retry in addition to the other rules.</summary>
-    public Func<Exception, bool>? Predicate { get; init; }
+    public Func<Exception, bool>? RetryWhen { get; init; }
 
     /// <summary>
     /// Total retry budget per SDK call, including the initial attempt and delays; <c>null</c> disables the limit.
@@ -93,12 +93,12 @@ public sealed record RetryPolicy
     {
         var builtin = error switch
         {
-            TypeSafeApiTimeoutException => ApiTimeoutError,
-            TypeSafeApiConnectionException => ApiConnectionError,
-            TypeSafeApiException api => HttpStatuses.Contains(api.Status),
+            TypeSafeApiTimeoutException => RetryTimeouts,
+            TypeSafeApiConnectionException => RetryConnectionErrors,
+            TypeSafeApiException api => HttpStatuses.Contains((int)api.StatusCode),
             _ => false,
         };
-        return builtin || (Predicate is not null && Predicate(error));
+        return builtin || (RetryWhen is not null && RetryWhen(error));
     }
 
     /// <summary>

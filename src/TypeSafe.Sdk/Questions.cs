@@ -1,29 +1,52 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using TypeSafe.Internal;
 
 namespace TypeSafe;
 
 /// <summary>
 /// A question to ask about a state, identified by its <see cref="Type"/>. Create questions with the
-/// static builders <see cref="Noul(object?, object?, object?)"/>, <see cref="Choice(object?, string[])"/>,
-/// <see cref="Score(object?, object?[])"/>, or <see cref="FromJson(JsonObject)"/> for raw dictionaries.
+/// static builders <see cref="Noul(Content, Content, Content)"/>, <see cref="Choice(Content, string[])"/>,
+/// <see cref="Score(Content, Content[])"/>, or <see cref="FromJson(JsonObject)"/> for raw dictionaries.
 /// </summary>
 /// <remarks>
-/// Instructions and descriptions accept text, a JSON object, or an array. Plain .NET objects
-/// (anonymous types, dictionaries, records) are serialized with camelCase web defaults; pass a
-/// <see cref="JsonNode"/> to control serialization yourself.
+/// <para>
+/// Instructions and descriptions are <see cref="Content"/>: text, a <see cref="JsonObject"/>, and a
+/// <see cref="JsonArray"/> convert implicitly, and the default value leaves them unset. Plain .NET
+/// objects (anonymous types, dictionaries, records) go through <see cref="Content.From(object?)"/>,
+/// which serializes them with camelCase web defaults.
+/// </para>
+/// <para>
+/// The question records are written by the source-generated <c>TypeSafeJsonContext</c>: <c>type</c> is
+/// the polymorphic discriminator, so it is always written first and the <see cref="Type"/> property
+/// itself is ignored, and <c>[JsonPropertyOrder]</c> pins <c>instructions</c> ahead of <c>criteria</c>
+/// regardless of where in the hierarchy each is declared. <see cref="RawQuestion"/> is deliberately not
+/// a derived type of this hierarchy: it forwards its own JSON object instead.
+/// </para>
 /// </remarks>
-public abstract class Question
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(NoulQuestion), "noul")]
+[JsonDerivedType(typeof(ChoiceQuestion), "choice")]
+[JsonDerivedType(typeof(ScoreQuestion), "score")]
+public abstract record Question
 {
     private protected Question(JsonNode? instructions)
     {
         Instructions = instructions;
     }
 
-    /// <summary>The wire discriminator: <c>noul</c>, <c>choice</c>, or <c>score</c>.</summary>
+    /// <summary>
+    /// The wire discriminator: <c>noul</c>, <c>choice</c>, or <c>score</c>. Always ignored by the
+    /// serializer: <c>type</c> is polymorphic metadata, written by the discriminator.
+    /// </summary>
+    [JsonIgnore]
     public abstract string Type { get; }
 
     /// <summary>The question as text, a JSON object, or an array; <c>null</c> leaves it unset.</summary>
+    [JsonPropertyName("instructions")]
+    [JsonPropertyOrder(1)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonNode? Instructions { get; }
 
     /// <summary>
@@ -33,10 +56,10 @@ public abstract class Question
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
     /// <param name="whenTrue">Optional description of the yes outcome.</param>
     /// <param name="whenFalse">Optional description of the no outcome.</param>
-    public static NoulQuestion Noul(object? instructions = null, object? whenTrue = null, object? whenFalse = null) =>
-        new(JsonContent.From(instructions), whenTrue is null && whenFalse is null
+    public static NoulQuestion Noul(Content instructions = default, Content whenTrue = default, Content whenFalse = default) =>
+        new(instructions.Node, whenTrue.Node is null && whenFalse.Node is null
             ? null
-            : new NoulCriteria(JsonContent.From(whenTrue), JsonContent.From(whenFalse)));
+            : new NoulCriteria(whenTrue, whenFalse));
 
     /// <summary>
     /// Create a question that selects between undescribed labels.
@@ -44,12 +67,12 @@ public abstract class Question
     /// </summary>
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
     /// <param name="labels">The available labels.</param>
-    public static ChoiceQuestion Choice(object? instructions, params string[] labels)
+    public static ChoiceQuestion Choice(Content instructions, params string[] labels)
     {
         ArgumentNullException.ThrowIfNull(labels);
         var criteria = new Dictionary<string, JsonNode?>();
         foreach (var label in labels) criteria[label] = null;
-        return new ChoiceQuestion(JsonContent.From(instructions), criteria);
+        return new ChoiceQuestion(instructions.Node, criteria);
     }
 
     /// <summary>
@@ -57,13 +80,13 @@ public abstract class Question
     /// See the <see href="https://docs.typesafe.ai/primitives/choice">choice primitive</see> for details.
     /// </summary>
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
-    /// <param name="criteria">Labels mapped to descriptions, or <c>null</c> for undescribed labels.</param>
-    public static ChoiceQuestion Choice<TDescription>(object? instructions, IEnumerable<KeyValuePair<string, TDescription>> criteria)
+    /// <param name="criteria">Labels mapped to descriptions; the default <see cref="Content"/> leaves a label undescribed.</param>
+    public static ChoiceQuestion Choice(Content instructions, IEnumerable<KeyValuePair<string, Content>> criteria)
     {
         ArgumentNullException.ThrowIfNull(criteria);
         var converted = new Dictionary<string, JsonNode?>();
-        foreach (var (label, description) in criteria) converted[label] = JsonContent.From(description);
-        return new ChoiceQuestion(JsonContent.From(instructions), converted);
+        foreach (var (label, description) in criteria) converted[label] = description.Node;
+        return new ChoiceQuestion(instructions.Node, converted);
     }
 
     /// <summary>
@@ -71,23 +94,16 @@ public abstract class Question
     /// See the <see href="https://docs.typesafe.ai/primitives/score">score primitive</see> for details.
     /// </summary>
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
-    /// <param name="criteria">Descriptions indexed by score from zero, at least one; entries may be <c>null</c>.</param>
-    public static ScoreQuestion Score(object? instructions, params object?[] criteria)
+    /// <param name="criteria">
+    /// Descriptions indexed by score from zero, at least one; the default <see cref="Content"/> leaves a
+    /// score undescribed.
+    /// </param>
+    public static ScoreQuestion Score(Content instructions, params Content[] criteria)
     {
         ArgumentNullException.ThrowIfNull(criteria);
-        return new ScoreQuestion(JsonContent.From(instructions), criteria.Select(JsonContent.From).ToList());
-    }
-
-    /// <summary>
-    /// Create a question that assigns a score using an ordered rubric.
-    /// See the <see href="https://docs.typesafe.ai/primitives/score">score primitive</see> for details.
-    /// </summary>
-    /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
-    /// <param name="criteria">Descriptions indexed by score from zero, at least one; entries may be <c>null</c>.</param>
-    public static ScoreQuestion Score<TDescription>(object? instructions, IEnumerable<TDescription> criteria)
-    {
-        ArgumentNullException.ThrowIfNull(criteria);
-        return new ScoreQuestion(JsonContent.From(instructions), criteria.Select(item => JsonContent.From(item)).ToList());
+        var descriptions = new List<JsonNode?>(criteria.Length);
+        foreach (var description in criteria) descriptions.Add(description.Node);
+        return new ScoreQuestion(instructions.Node, descriptions);
     }
 
     /// <summary>
@@ -96,14 +112,22 @@ public abstract class Question
     /// </summary>
     public static RawQuestion FromJson(JsonObject json) => new(json);
 
-    /// <summary>Serialize the question for the request body, validating it under <paramref name="name"/>.</summary>
-    internal abstract JsonObject ToJson(string name);
-
-    private protected JsonObject Envelope()
+    /// <summary>
+    /// Validate a question under <paramref name="name"/> and serialize it for the request body through
+    /// the source-generated context. A <see cref="RawQuestion"/> forwards its own JSON object instead.
+    /// </summary>
+    internal static JsonObject Serialize(string name, Question question)
     {
-        var json = new JsonObject { ["type"] = Type };
-        if (Instructions is not null) json["instructions"] = Instructions.DeepClone();
-        return json;
+        ArgumentNullException.ThrowIfNull(question);
+        switch (question)
+        {
+            case RawQuestion raw:
+                return raw.Validated(name);
+            case ScoreQuestion score:
+                ValidateScoreCriteria(name, score.Criteria.Count);
+                break;
+        }
+        return (JsonObject)JsonSerializer.SerializeToNode(question, TypeSafeJsonContext.Default.Question)!;
     }
 
     /// <summary>Validate a set of questions and serialize it for the request body.</summary>
@@ -114,7 +138,7 @@ public abstract class Question
         foreach (var (name, question) in questions)
         {
             if (question is null) throw new TypeSafeException($"Question \"{name}\" must not be null.");
-            json[name] = question.ToJson(name);
+            json[name] = Serialize(name, question);
         }
         if (json.Count == 0) throw new TypeSafeException("At least one question is required.");
         return json;
@@ -128,108 +152,81 @@ public abstract class Question
 }
 
 /// <summary>Optional descriptions of the yes and no outcomes of a <see cref="NoulQuestion"/>.</summary>
-public sealed class NoulCriteria
+public sealed record NoulCriteria
 {
-    /// <summary>Create outcome descriptions; <c>null</c> leaves an outcome undescribed.</summary>
-    public NoulCriteria(JsonNode? whenTrue = null, JsonNode? whenFalse = null)
+    /// <summary>Create outcome descriptions; the default <see cref="Content"/> leaves an outcome undescribed.</summary>
+    /// <param name="whenTrue">Description of the yes outcome.</param>
+    /// <param name="whenFalse">Description of the no outcome.</param>
+    public NoulCriteria(Content whenTrue = default, Content whenFalse = default)
     {
-        WhenTrue = whenTrue;
-        WhenFalse = whenFalse;
+        WhenTrue = whenTrue.Node;
+        WhenFalse = whenFalse.Node;
     }
 
     /// <summary>Description of the yes outcome as text, a JSON object, or an array; <c>null</c> leaves it undescribed.</summary>
-    public JsonNode? WhenTrue { get; }
+    [JsonPropertyName("true")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonNode? WhenTrue { get; init; }
 
     /// <summary>Description of the no outcome as text, a JSON object, or an array; <c>null</c> leaves it undescribed.</summary>
-    public JsonNode? WhenFalse { get; }
-
-    internal JsonObject ToJson()
-    {
-        var json = new JsonObject();
-        if (WhenTrue is not null) json["true"] = WhenTrue.DeepClone();
-        if (WhenFalse is not null) json["false"] = WhenFalse.DeepClone();
-        return json;
-    }
+    [JsonPropertyName("false")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonNode? WhenFalse { get; init; }
 }
 
 /// <summary>A yes/no question with optional descriptions for either outcome.</summary>
-public sealed class NoulQuestion : Question
+/// <param name="Instructions">The question as text, a JSON object, or an array; <c>null</c> leaves it unset.</param>
+/// <param name="Criteria">Optional descriptions of the yes and no outcomes.</param>
+public sealed record NoulQuestion(
+    JsonNode? Instructions = null,
+    [property: JsonPropertyName("criteria")]
+    [property: JsonPropertyOrder(2)]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    NoulCriteria? Criteria = null) : Question(Instructions)
 {
-    /// <summary>Create a yes/no question.</summary>
-    public NoulQuestion(JsonNode? instructions = null, NoulCriteria? criteria = null) : base(instructions)
-    {
-        Criteria = criteria;
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "noul";
-
-    /// <summary>Optional descriptions of the yes and no outcomes.</summary>
-    public NoulCriteria? Criteria { get; }
-
-    internal override JsonObject ToJson(string name)
-    {
-        var json = Envelope();
-        if (Criteria is not null) json["criteria"] = Criteria.ToJson();
-        return json;
-    }
 }
 
 /// <summary>A question that selects between named alternatives.</summary>
-public sealed class ChoiceQuestion : Question
+/// <param name="Instructions">The question as text, a JSON object, or an array; <c>null</c> leaves it unset.</param>
+/// <param name="Criteria">Labels mapped to descriptions, or <c>null</c> for undescribed labels.</param>
+public sealed record ChoiceQuestion(
+    JsonNode? Instructions,
+    IReadOnlyDictionary<string, JsonNode?> Criteria) : Question(Instructions)
 {
-    /// <summary>Create a choice question from labels mapped to descriptions, or <c>null</c> for undescribed labels.</summary>
-    public ChoiceQuestion(JsonNode? instructions, IReadOnlyDictionary<string, JsonNode?> criteria) : base(instructions)
-    {
-        ArgumentNullException.ThrowIfNull(criteria);
-        Criteria = criteria;
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "choice";
 
     /// <summary>Labels mapped to descriptions, or <c>null</c> for undescribed labels.</summary>
-    public IReadOnlyDictionary<string, JsonNode?> Criteria { get; }
-
-    internal override JsonObject ToJson(string name)
-    {
-        var json = Envelope();
-        var criteria = new JsonObject();
-        foreach (var (label, description) in Criteria) criteria[label] = description?.DeepClone();
-        json["criteria"] = criteria;
-        return json;
-    }
+    [JsonPropertyName("criteria")]
+    [JsonPropertyOrder(2)]
+    public IReadOnlyDictionary<string, JsonNode?> Criteria { get; init; } =
+        Criteria ?? throw new ArgumentNullException(nameof(Criteria));
 }
 
 /// <summary>A question that assigns a score using an ordered rubric.</summary>
-public sealed class ScoreQuestion : Question
+/// <param name="Instructions">The question as text, a JSON object, or an array; <c>null</c> leaves it unset.</param>
+/// <param name="Criteria">Ordered descriptions, one per score from zero; entries may be <c>null</c>.</param>
+public sealed record ScoreQuestion(
+    JsonNode? Instructions,
+    IReadOnlyList<JsonNode?> Criteria) : Question(Instructions)
 {
-    /// <summary>Create a score question from descriptions indexed by score from zero.</summary>
-    public ScoreQuestion(JsonNode? instructions, IReadOnlyList<JsonNode?> criteria) : base(instructions)
-    {
-        ArgumentNullException.ThrowIfNull(criteria);
-        Criteria = criteria;
-    }
-
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => "score";
 
     /// <summary>Ordered descriptions, one per score from zero; entries may be <c>null</c>.</summary>
-    public IReadOnlyList<JsonNode?> Criteria { get; }
-
-    internal override JsonObject ToJson(string name)
-    {
-        ValidateScoreCriteria(name, Criteria.Count);
-        var json = Envelope();
-        var criteria = new JsonArray();
-        foreach (var description in Criteria) criteria.Add(description?.DeepClone());
-        json["criteria"] = criteria;
-        return json;
-    }
+    [JsonPropertyName("criteria")]
+    [JsonPropertyOrder(2)]
+    public IReadOnlyList<JsonNode?> Criteria { get; init; } =
+        Criteria ?? throw new ArgumentNullException(nameof(Criteria));
 }
 
 /// <summary>A question supplied as a raw JSON object, forwarded with every field intact.</summary>
-public sealed class RawQuestion : Question
+public sealed record RawQuestion : Question
 {
     /// <summary>Wrap a raw question object; it must carry a nonempty string <c>type</c>.</summary>
     public RawQuestion(JsonObject json) : base(json?["instructions"]?.DeepClone())
@@ -239,12 +236,15 @@ public sealed class RawQuestion : Question
     }
 
     /// <inheritdoc/>
+    [JsonIgnore]
     public override string Type => JsonContent.AsString(Json["type"]) ?? "";
 
     /// <summary>The raw question object.</summary>
+    [JsonIgnore]
     public JsonObject Json { get; }
 
-    internal override JsonObject ToJson(string name)
+    /// <summary>Validate the raw object under <paramref name="name"/> and return a detached copy of it.</summary>
+    internal JsonObject Validated(string name)
     {
         var type = JsonContent.AsString(Json["type"]);
         if (string.IsNullOrEmpty(type))

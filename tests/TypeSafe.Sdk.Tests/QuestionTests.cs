@@ -4,7 +4,7 @@ namespace TypeSafe.Tests;
 
 public class QuestionTests
 {
-    private static string Wire(Question question, string name = "q") => question.ToJson(name).ToJsonString();
+    private static string Wire(Question question, string name = "q") => Question.Serialize(name, question).ToJsonString();
 
     [Fact]
     public void NoulSerializesInstructionsAndOptionalCriteria()
@@ -13,7 +13,7 @@ public class QuestionTests
         Assert.Equal("""{"type":"noul","instructions":"Is it urgent?"}""", Wire(Question.Noul("Is it urgent?")));
         Assert.Equal(
             """{"type":"noul","instructions":"Is it urgent?","criteria":{"true":"needs action today","false":{"note":"can wait"}}}""",
-            Wire(Question.Noul("Is it urgent?", whenTrue: "needs action today", whenFalse: new { note = "can wait" })));
+            Wire(Question.Noul("Is it urgent?", whenTrue: "needs action today", whenFalse: Content.From(new { note = "can wait" }))));
         Assert.Equal("""{"type":"noul","criteria":{"false":"nope"}}""", Wire(Question.Noul(whenFalse: "nope")));
     }
 
@@ -28,18 +28,18 @@ public class QuestionTests
     [Fact]
     public void ChoiceFromDictionaryKeepsDescriptions()
     {
-        var question = Question.Choice("Tone?", new Dictionary<string, string?>
+        var question = Question.Choice("Tone?", new Dictionary<string, Content>
         {
             ["calm"] = "measured language",
-            ["angry"] = null,
+            ["angry"] = Content.Null,
         });
         Assert.Equal(
             """{"type":"choice","instructions":"Tone?","criteria":{"calm":"measured language","angry":null}}""",
             Wire(question));
 
-        var structured = Question.Choice(new { text = "Tone?" }, new Dictionary<string, object?>
+        var structured = Question.Choice(Content.From(new { text = "Tone?" }), new Dictionary<string, Content>
         {
-            ["calm"] = new[] { "quiet", "polite" },
+            ["calm"] = Content.From(new[] { "quiet", "polite" }),
         });
         Assert.Equal(
             """{"type":"choice","instructions":{"text":"Tone?"},"criteria":{"calm":["quiet","polite"]}}""",
@@ -51,10 +51,18 @@ public class QuestionTests
     {
         Assert.Equal(
             """{"type":"score","instructions":"Urgency?","criteria":["low","mid",null,{"label":"high"}]}""",
-            Wire(Question.Score("Urgency?", "low", "mid", null, new { label = "high" })));
+            Wire(Question.Score("Urgency?", "low", "mid", Content.Null, Content.From(new { label = "high" }))));
         Assert.Equal(
             """{"type":"score","criteria":["a","b"]}""",
-            Wire(Question.Score(null, new List<string> { "a", "b" })));
+            Wire(Question.Score(Content.Null, ["a", "b"])));
+    }
+
+    [Fact]
+    public void ScoreAcceptsACollectionExpressionOfStringCriteria()
+    {
+        Assert.Equal(
+            """{"type":"score","instructions":"How urgent?","criteria":["can wait","today"]}""",
+            Wire(Question.Score("How urgent?", ["can wait", "today"])));
     }
 
     [Fact]
