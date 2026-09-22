@@ -40,10 +40,16 @@ jobs:
       - name: Check the version is consistent
         run: scripts/check-version.sh
 
-      - name: Pack
+      - name: Pack the SDK
         run: dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release -o artifacts
 
-      - name: Upload the package
+      - name: Pack the dependency-injection package
+        run: >-
+          dotnet pack
+          src/TypeSafe.Sdk.DependencyInjection/TypeSafe.Sdk.DependencyInjection.csproj
+          -c Release -o artifacts
+
+      - name: Upload the packages
         uses: actions/upload-artifact@v4
         with:
           name: nupkg

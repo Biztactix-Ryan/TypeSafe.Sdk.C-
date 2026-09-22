@@ -42,8 +42,14 @@ jobs:
       - name: Test
         run: dotnet test -c Release --no-build
 
-      - name: Pack
+      - name: Pack the SDK
         run: dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release --no-build -o artifacts
+
+      - name: Pack the dependency-injection package
+        run: >-
+          dotnet pack
+          src/TypeSafe.Sdk.DependencyInjection/TypeSafe.Sdk.DependencyInjection.csproj
+          -c Release --no-build -o artifacts
 
       - name: Push to nuget.org
         run: >-
