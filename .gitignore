@@ -12,3 +12,9 @@ artifacts/
 
 # Verify snapshot output: *.received.* is the failing run's actual value, never committed.
 *.received.*
+
+# Private live-test material (runsettings carrying a real TYPESAFE_API_KEY, local scenarios). Never committed.
+tests/TypeSafe.Sdk.IntegrationTests/Local/
+
+# Private local tooling (interactive playground that reads the key from the Local runsettings). Never committed.
+local/

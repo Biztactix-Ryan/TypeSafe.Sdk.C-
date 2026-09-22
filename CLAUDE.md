@@ -10,6 +10,7 @@ C# on .NET 10 (library, tests and demo all target `net10.0`; requires the .NET 1
 |------|---------|
 | Build | `dotnet build` |
 | Test | `dotnet test` |
+| Live tests | `TYPESAFE_API_KEY=... dotnet test tests/TypeSafe.Sdk.IntegrationTests` |
 | Pack | `dotnet pack src/TypeSafe.Sdk/TypeSafe.Sdk.csproj -c Release -o artifacts` |
 | Demo | `TYPESAFE_API_KEY=... dotnet run --project examples/TypeSafe.Sdk.Demo` |
 | Version check | `scripts/check-version.sh` (optionally `scripts/check-version.sh 0.7.0`) |
