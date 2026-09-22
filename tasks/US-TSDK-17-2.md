@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-17-4
 id: US-TSDK-17-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-17
 tags: []
 title: 'Test: Backoff uses Task.Delay(delay, timeProvider, cancellationToken) and

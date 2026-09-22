@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-20-5
 id: US-TSDK-20-6
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-20
 tags: []
 title: Preserve wire order with an OrderedDictionary Answers and expose Nouls/Choices/Scores

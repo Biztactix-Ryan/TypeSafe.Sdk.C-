@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-20-6
 id: US-TSDK-20-7
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-20
 tags: []
 title: Adopt params ReadOnlySpan<T> on builders and the field keyword on lazy properties

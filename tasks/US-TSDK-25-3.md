@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-25-5
 id: US-TSDK-25-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-25
 tags: []
 title: 'Test: The named HttpClient is not disposed by the SDK and resilience handlers

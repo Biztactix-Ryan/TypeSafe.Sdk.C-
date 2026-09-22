@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-19-6
 id: US-TSDK-19-2
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-19
 tags: []
 title: 'Test: A CapturingLogger test sees RequestId and StatusCode as named state

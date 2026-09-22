@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-24-6
 id: US-TSDK-24-4
 points: 1
-status: todo
+status: review
 story_id: US-TSDK-24
 tags: []
 title: 'Test: SECURITY.md risk about stub-only testing is updated once the suite passes'

@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-20-7
 id: US-TSDK-20-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-20
 tags: []
 title: 'Test: Builders use params ReadOnlySpan<T> and lazy properties use the field

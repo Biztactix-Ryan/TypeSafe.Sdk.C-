@@ -56,9 +56,14 @@ Consumers supply the key via environment or their own secret store (Infisical, A
 | Risk | Severity | Mitigation | Status |
 |------|----------|------------|--------|
 | Debug logging leaks PII in bodies | Medium | Off by default; documented; headers redacted | Accepted |
-| Not yet validated against the live API (stub tests only) | Medium | Integration tests gated on `TYPESAFE_API_KEY` once access exists | Open |
+| Not yet validated against the live API (stub tests only) | Medium | `tests/TypeSafe.Sdk.IntegrationTests` — three `[SkippableFact]` live tests gated on `TYPESAFE_API_KEY`, skipped with "TYPESAFE_API_KEY is not set; live tests skipped" when it is absent. The bad-key test (401 + request id) has been observed passing against the live API from this machine using only a bogus key; the models-list and System One tests have not yet run with a real key | Mitigated pending first keyed run |
 | `object?` inputs use reflection serialisation (trim/AOT unsafe, silent camelCase renaming) | Low | Replace with `Content` type (epic TSDK-2) | Planned |
 | Supplied `HttpClient.Timeout` inherited as the SDK timeout (100 s default) | Low | Documented; consider explicit default | Open |
+
+The live-validation risk closes — status `Mitigated` — once `Models_list_returns_at_least_one_model_with_a_name` and
+`System_one_answers_a_noul_a_choice_and_a_score_question` have both passed against the live API with a real key. As of
+2026-09-18 they have not: no key has been available, so those two tests have only ever been skipped. The suite runs in
+CI, where no key is configured and all three tests skip by design; no secret is added to CI and the key is never logged.
 
 ## Incident Response
 

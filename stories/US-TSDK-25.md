@@ -14,7 +14,7 @@ epic_id: EPIC-TSDK-7
 id: US-TSDK-25
 points: 5
 priority: could
-status: ready
+status: done
 tags:
 - di
 - package

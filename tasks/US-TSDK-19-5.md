@@ -1,13 +1,13 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
 depends_on: []
 id: US-TSDK-19-5
 points: 3
-status: todo
+status: done
 story_id: US-TSDK-19
 tags: []
 title: Route all transport logging through [LoggerMessage] partial methods with EventIds

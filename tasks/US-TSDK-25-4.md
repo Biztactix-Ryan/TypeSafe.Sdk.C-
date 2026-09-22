@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-25-6
 id: US-TSDK-25-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-25
 tags: []
 title: 'Test: README has a DI section and the core package''s dependency list is unchanged'

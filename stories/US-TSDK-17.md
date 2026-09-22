@@ -11,7 +11,7 @@ epic_id: EPIC-TSDK-6
 id: US-TSDK-17
 points: 3
 priority: should
-status: ready
+status: done
 tags:
 - step-6
 - tests

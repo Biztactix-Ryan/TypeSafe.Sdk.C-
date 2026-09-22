@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-24-5
 id: US-TSDK-24-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-24
 tags: []
 title: 'Test: Tests are skipped with a clear reason when TYPESAFE_API_KEY is absent'

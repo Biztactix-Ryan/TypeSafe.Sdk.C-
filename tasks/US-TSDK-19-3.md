@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-19-5
 id: US-TSDK-19-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-19
 tags: []
 title: 'Test: Header redaction and body logging at Debug behave as before'

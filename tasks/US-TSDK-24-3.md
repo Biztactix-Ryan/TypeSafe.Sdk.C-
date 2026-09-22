@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-24-5
 id: US-TSDK-24-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-24
 tags: []
 title: 'Test: A 401 from a bad key surfaces as TypeSafeAuthenticationException with

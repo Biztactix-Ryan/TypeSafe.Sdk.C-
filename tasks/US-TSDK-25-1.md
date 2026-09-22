@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-25-5
 id: US-TSDK-25-1
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-25
 tags: []
 title: 'Test: A separate project TypeSafe.Sdk.DependencyInjection references Microsoft.Extensions.Http

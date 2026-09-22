@@ -1,6 +1,6 @@
 ---
 archived: false
-assignee: null
+assignee: claude
 claimed_at: null
 claimed_by_run: null
 created: '2026-09-18'
@@ -9,7 +9,7 @@ depends_on:
 - US-TSDK-19-5
 id: US-TSDK-20-5
 points: 2
-status: todo
+status: done
 story_id: US-TSDK-20
 tags: []
 title: Make TypeSafeClientOptions and RequestOptions sealed records with init setters

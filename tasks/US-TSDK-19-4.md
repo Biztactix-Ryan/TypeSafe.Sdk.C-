@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-19-5
 id: US-TSDK-19-4
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-19
 tags: []
 title: 'Test: SdkLog is reduced to the minimum-level filter or removed'

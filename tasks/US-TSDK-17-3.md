@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-17-5
 id: US-TSDK-17-3
 points: 1
-status: todo
+status: done
 story_id: US-TSDK-17
 tags: []
 title: 'Test: RetryTests assert the 500ms, 1s, 2s schedule and Retry-After HTTP dates

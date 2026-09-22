@@ -8,7 +8,7 @@ depends_on:
 - US-TSDK-24-5
 id: US-TSDK-24-2
 points: 1
-status: todo
+status: review
 story_id: US-TSDK-24
 tags: []
 title: 'Test: Models.ListAsync returns at least one model and SystemOneAsync answers

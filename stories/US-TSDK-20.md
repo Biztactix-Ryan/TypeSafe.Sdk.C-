@@ -15,7 +15,7 @@ epic_id: EPIC-TSDK-6
 id: US-TSDK-20
 points: 3
 priority: could
-status: ready
+status: done
 tags:
 - step-6
 - quality
