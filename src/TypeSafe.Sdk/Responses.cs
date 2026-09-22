@@ -264,16 +264,35 @@ internal sealed record SystemOneBody(
 /// </summary>
 public sealed class SystemOneResponse : ApiResponse
 {
-    private IReadOnlyDictionary<string, NoulAnswer>? _nouls;
-    private IReadOnlyDictionary<string, ChoiceAnswer>? _choices;
-    private IReadOnlyDictionary<string, ScoreAnswer>? _scores;
+    private readonly OrderedDictionary<string, Answer> _answers;
 
     /// <summary>Create a response from its parts.</summary>
+    /// <param name="model">The model that answered the request.</param>
+    /// <param name="usage">Token usage for the request.</param>
+    /// <param name="answers">
+    /// Answers keyed by question name. The order they enumerate in is the order this response keeps
+    /// and reports from <see cref="GetAt"/>; a decoded response is handed the map
+    /// <see cref="AnswerMapConverter"/> built in wire order, and is not copied.
+    /// </param>
+    /// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
     public SystemOneResponse(string model, Usage usage, IReadOnlyDictionary<string, Answer> answers)
     {
         Model = model ?? throw new ArgumentNullException(nameof(model));
         Usage = usage ?? throw new ArgumentNullException(nameof(usage));
-        Answers = answers ?? throw new ArgumentNullException(nameof(answers));
+        ArgumentNullException.ThrowIfNull(answers);
+        _answers = answers as OrderedDictionary<string, Answer> ?? Ordered(answers);
+    }
+
+    /// <summary>
+    /// Copy a map into an <see cref="OrderedDictionary{TKey, TValue}"/>, in its own enumeration order, so
+    /// a response built in code from a plain dictionary still supports <see cref="GetAt"/>. A decoded
+    /// response never reaches this: <see cref="AnswerMapConverter"/> already builds an ordered map.
+    /// </summary>
+    private static OrderedDictionary<string, Answer> Ordered(IReadOnlyDictionary<string, Answer> answers)
+    {
+        var ordered = new OrderedDictionary<string, Answer>(answers.Count, StringComparer.Ordinal);
+        foreach (var (name, answer) in answers) ordered[name] = answer;
+        return ordered;
     }
 
     /// <summary>The model used to answer the request.</summary>
@@ -288,26 +307,39 @@ public sealed class SystemOneResponse : ApiResponse
     /// <see cref="Answer.AdditionalProperties"/>, and reach none of <see cref="Nouls"/>,
     /// <see cref="Choices"/> or <see cref="Scores"/>.
     /// </summary>
-    public IReadOnlyDictionary<string, Answer> Answers { get; }
+    /// <remarks>
+    /// Declared as an <see cref="IReadOnlyDictionary{TKey, TValue}"/>, but always an
+    /// <see cref="OrderedDictionary{TKey, TValue}"/>: it enumerates in the order the server wrote the
+    /// answers, not in hash order, and <see cref="GetAt"/> reads it by position. The typed views keep
+    /// that order too.
+    /// </remarks>
+    public IReadOnlyDictionary<string, Answer> Answers => _answers;
 
-    /// <summary>Yes/no answers keyed by question name.</summary>
-    public IReadOnlyDictionary<string, NoulAnswer> Nouls => _nouls ??= Filter<NoulAnswer>();
+    /// <summary>The number of answers in the response, the same as <c>Answers.Count</c>.</summary>
+    public int Count => _answers.Count;
 
-    /// <summary>Choice answers keyed by question name.</summary>
-    public IReadOnlyDictionary<string, ChoiceAnswer> Choices => _choices ??= Filter<ChoiceAnswer>();
+    /// <summary>
+    /// The answer at <paramref name="index"/> in wire order, with its question name:
+    /// <c>response.GetAt(0)</c> is the first answer the server wrote, whatever it is called.
+    /// </summary>
+    /// <param name="index">Zero-based position in <see cref="Answers"/>.</param>
+    /// <returns>The question name and its answer.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="index"/> is negative or not less than <see cref="Count"/>.
+    /// </exception>
+    public KeyValuePair<string, Answer> GetAt(int index) => _answers.GetAt(index);
 
-    /// <summary>Score answers keyed by question name.</summary>
-    public IReadOnlyDictionary<string, ScoreAnswer> Scores => _scores ??= Filter<ScoreAnswer>();
+    /// <summary>Yes/no answers keyed by question name, in wire order; built once on first read.</summary>
+    [field: MaybeNull]
+    public IReadOnlyDictionary<string, NoulAnswer> Nouls => field ??= Answers.Nouls;
 
-    private Dictionary<string, TAnswer> Filter<TAnswer>() where TAnswer : Answer
-    {
-        var filtered = new Dictionary<string, TAnswer>();
-        foreach (var (name, answer) in Answers)
-        {
-            if (answer is TAnswer typed) filtered[name] = typed;
-        }
-        return filtered;
-    }
+    /// <summary>Choice answers keyed by question name, in wire order; built once on first read.</summary>
+    [field: MaybeNull]
+    public IReadOnlyDictionary<string, ChoiceAnswer> Choices => field ??= Answers.Choices;
+
+    /// <summary>Score answers keyed by question name, in wire order; built once on first read.</summary>
+    [field: MaybeNull]
+    public IReadOnlyDictionary<string, ScoreAnswer> Scores => field ??= Answers.Scores;
 
     /// <summary>
     /// The answer to a named question, typed by the question: <c>response.Get(tone)</c> is a
@@ -394,8 +426,8 @@ public sealed class SystemOneResponse : ApiResponse
     /// Project a decoded <c>POST /v1/systemone</c> body, warning about answer types this SDK does not model.
     /// </summary>
     /// <param name="body">The body decoded by <c>TypeSafeJsonContext</c>.</param>
-    /// <param name="warn">Called once per unmodelled answer, naming the question and the unrecognized type.</param>
-    internal static SystemOneResponse FromBody(SystemOneBody body, Action<string>? warn)
+    /// <param name="warn">Called once per unmodelled answer with the question name and the unrecognized type.</param>
+    internal static SystemOneResponse FromBody(SystemOneBody body, Action<string, string>? warn)
     {
         // Forward-compat: an answer whose type this SDK version does not model decodes as a bare
         // Answer, with every field (including "type") in AdditionalProperties. Each one is reported
@@ -408,7 +440,7 @@ public sealed class SystemOneResponse : ApiResponse
             {
                 if (answer.GetType() == typeof(Answer))
                 {
-                    warn($"Ignoring answer \"{name}\" with unrecognized type \"{UnmodelledType(answer)}\"");
+                    warn(name, UnmodelledType(answer));
                 }
             }
         }

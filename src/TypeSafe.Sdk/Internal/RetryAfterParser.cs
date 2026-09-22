@@ -5,7 +5,13 @@ namespace TypeSafe.Internal;
 /// <summary>Parse <c>retry-after-ms</c> or <c>Retry-After</c> into a delay, preferring <c>retry-after-ms</c>.</summary>
 internal static class RetryAfterParser
 {
-    public static TimeSpan? Parse(IReadOnlyDictionary<string, string> headers, DateTimeOffset? now = null)
+    /// <param name="headers">Response headers to read the delay from.</param>
+    /// <param name="now">Explicit reference time for HTTP-date values; defaults to <paramref name="timeProvider"/>'s current time.</param>
+    /// <param name="timeProvider">Clock consulted when <paramref name="now"/> is omitted; defaults to <see cref="TimeProvider.System"/>.</param>
+    public static TimeSpan? Parse(
+        IReadOnlyDictionary<string, string> headers,
+        DateTimeOffset? now = null,
+        TimeProvider? timeProvider = null)
     {
         if (TryGet(headers, Protocol.RetryAfterMsHeader) is { } rawMs
             && TryNumber(rawMs, out var ms)
@@ -21,7 +27,7 @@ internal static class RetryAfterParser
         }
         if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces, out var date))
         {
-            var delay = date - (now ?? DateTimeOffset.UtcNow);
+            var delay = date - (now ?? (timeProvider ?? TimeProvider.System).GetUtcNow());
             return delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
         }
         return null;

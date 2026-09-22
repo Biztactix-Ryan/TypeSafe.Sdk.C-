@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Net;
+using Microsoft.Extensions.Time.Testing;
 using TypeSafe.Internal;
 
 namespace TypeSafe.Tests;
@@ -228,5 +231,179 @@ public class RetryTests
     {
         var headers = new Dictionary<string, string> { ["retry-after-ms"] = "later", ["retry-after"] = "4" };
         Assert.Equal(TimeSpan.FromSeconds(4), RetryAfterParser.Parse(headers));
+    }
+
+    [Fact]
+    public void RetryAfterHttpDatesFollowTheInjectedTimeProvider()
+    {
+        Assert.Same(TimeProvider.System, new TypeSafeClientOptions().TimeProvider);
+
+        var clock = new FixedClock(new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero));
+        var headers = new Dictionary<string, string> { ["Retry-After"] = "Fri, 18 Sep 2026 10:00:30 GMT" };
+
+        Assert.Equal(TimeSpan.FromSeconds(30), RetryAfterParser.Parse(headers, timeProvider: clock));
+        Assert.Equal(TimeSpan.FromSeconds(30), RetryPolicy.Default.DelayFor(0, headers, clock));
+    }
+
+    /// <summary>A clock stopped at one instant, enough to prove which provider the parser consults.</summary>
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    [Fact]
+    public async Task DefaultBackoffScheduleIsHalfASecondThenOneThenTwoSeconds()
+    {
+        var fake = new FakeTimeProvider(new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero));
+        var clock = new BackoffRecordingClock(fake);
+        var attempts = new List<DateTimeOffset>();
+        var handler = new StubHandler((_, attempt) =>
+        {
+            attempts.Add(fake.GetUtcNow());
+            return attempt < 3 ? Http.Json(500, """{"error":"flaky"}""") : Http.Json(200, Http.SystemOneBody);
+        });
+        // The default backoff, with jitter off so the schedule is exact and one extra retry so the 2s step is reached.
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Retry = RetryPolicy.Default with { MaxRetries = 3, BackoffJitter = 0 };
+            o.TimeProvider = clock;
+        });
+
+        var wall = Stopwatch.StartNew();
+        var call = client.SystemOneAsync("x", Clients.SampleQuestions());
+        await AdvanceThroughBackoffsAsync(fake, clock, call, 3);
+        var response = await call;
+        wall.Stop();
+
+        var schedule = new[] { TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2) };
+        Assert.Equal("jev-latest", response.Model);
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(schedule, clock.Delays);
+        Assert.Equal(schedule, Deltas(attempts));
+        Assert.Equal(TimeSpan.FromMilliseconds(3500), attempts[^1] - attempts[0]);
+        AssertNoRealSleeping(wall.Elapsed);
+    }
+
+    [Fact]
+    public async Task DefaultJitterKeepsEachBackoffWithinAQuarterOfTheSchedule()
+    {
+        var fake = new FakeTimeProvider(new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero));
+        var clock = new BackoffRecordingClock(fake);
+        var attempts = new List<DateTimeOffset>();
+        var handler = new StubHandler((_, _) =>
+        {
+            attempts.Add(fake.GetUtcNow());
+            return Http.Json(503, """{"error":"down"}""");
+        });
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Retry = RetryPolicy.Default;
+            o.TimeProvider = clock;
+        });
+
+        var wall = Stopwatch.StartNew();
+        var call = client.SystemOneAsync("x", Clients.SampleQuestions());
+        await AdvanceThroughBackoffsAsync(fake, clock, call, 2);
+        await Assert.ThrowsAsync<TypeSafeInternalServerException>(() => call);
+        wall.Stop();
+
+        // Jitter subtracts up to BackoffJitter (0.25) of each exponential step.
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal(2, clock.Delays.Count);
+        Assert.InRange(clock.Delays[0].TotalMilliseconds, 375, 500);
+        Assert.InRange(clock.Delays[1].TotalMilliseconds, 750, 1000);
+        Assert.Equal(clock.Delays, Deltas(attempts));
+        AssertNoRealSleeping(wall.Elapsed);
+    }
+
+    [Fact]
+    public async Task RetryAfterHttpDateIsWaitedOutOnTheFakeClock()
+    {
+        var fake = new FakeTimeProvider(new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero));
+        var clock = new BackoffRecordingClock(fake);
+        var attempts = new List<DateTimeOffset>();
+        var handler = new StubHandler((_, attempt) =>
+        {
+            var now = fake.GetUtcNow();
+            attempts.Add(now);
+            return attempt == 0
+                ? Http.Json(429, "{}", ("Retry-After", now.AddSeconds(30).ToString("R", CultureInfo.InvariantCulture)))
+                : Http.Json(200, Http.SystemOneBody);
+        });
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Retry = RetryPolicy.Default;
+            o.TimeProvider = clock;
+        });
+
+        var wall = Stopwatch.StartNew();
+        var call = client.SystemOneAsync("x", Clients.SampleQuestions());
+        await AdvanceThroughBackoffsAsync(fake, clock, call, 1);
+        var response = await call;
+        wall.Stop();
+
+        Assert.Equal("jev-latest", response.Model);
+        Assert.Equal(2, handler.Requests.Count);
+        // The date is read against the injected clock, so the wait is the full 30s of fake time, not backoff.
+        Assert.Equal(TimeSpan.FromSeconds(30), Assert.Single(clock.Delays));
+        Assert.Equal(TimeSpan.FromSeconds(30), Assert.Single(Deltas(attempts)));
+        AssertNoRealSleeping(wall.Elapsed);
+    }
+
+    /// <summary>
+    /// Releases the next <paramref name="backoffs"/> retry sleeps: wait until the transport has armed
+    /// its timer on the fake clock, then advance by exactly the delay it asked for, so no wall-clock
+    /// time passes and the fake time between attempts is the backoff itself.
+    /// </summary>
+    private static async Task AdvanceThroughBackoffsAsync(FakeTimeProvider fake, BackoffRecordingClock clock, Task call, int backoffs)
+    {
+        for (var armed = 0; armed < backoffs; armed++)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            while (clock.Delays.Count <= armed && !call.IsCompleted)
+            {
+                if (stopwatch.Elapsed > TimeSpan.FromSeconds(10)) throw new TimeoutException($"Backoff {armed + 1} was never scheduled on the fake clock.");
+                await Task.Delay(1);
+            }
+            // A call that finished early scheduled fewer sleeps than expected; the test's own assertions report it.
+            if (clock.Delays.Count <= armed) return;
+            fake.Advance(clock.Delays[armed]);
+        }
+    }
+
+    private static TimeSpan[] Deltas(List<DateTimeOffset> instants) =>
+        instants.Zip(instants.Skip(1), (earlier, later) => later - earlier).ToArray();
+
+    private static void AssertNoRealSleeping(TimeSpan elapsed) =>
+        Assert.True(elapsed < TimeSpan.FromSeconds(2), $"The fake-clocked retries slept for {elapsed.TotalMilliseconds:0}ms of real time.");
+
+    /// <summary>
+    /// A <see cref="FakeTimeProvider"/> that also records the due time of every timer armed against it.
+    /// <c>Task.Delay(delay, provider, token)</c> arms one timer per sleep, so the recorded due times are
+    /// the backoffs the retry policy chose, captured before any fake time is advanced.
+    /// </summary>
+    private sealed class BackoffRecordingClock(FakeTimeProvider inner) : TimeProvider
+    {
+        private readonly List<TimeSpan> _delays = new();
+
+        public IReadOnlyList<TimeSpan> Delays
+        {
+            get { lock (_delays) return _delays.ToArray(); }
+        }
+
+        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
+
+        public override long GetTimestamp() => inner.GetTimestamp();
+
+        public override long TimestampFrequency => inner.TimestampFrequency;
+
+        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = inner.CreateTimer(callback, state, dueTime, period);
+            lock (_delays) _delays.Add(dueTime);
+            return timer;
+        }
     }
 }

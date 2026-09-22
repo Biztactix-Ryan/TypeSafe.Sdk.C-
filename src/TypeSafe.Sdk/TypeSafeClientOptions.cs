@@ -6,9 +6,12 @@ namespace TypeSafe;
 /// Client options. Explicit values take precedence over environment variables, then SDK defaults.
 /// Empty or whitespace-only environment values are ignored.
 /// Every property is <c>init</c>-only: set them in an object initializer, as the client reads them
-/// once during construction and later changes would have no effect.
+/// once during construction and later changes would have no effect. This is a <c>record</c>, so a
+/// variant is derived with <c>options with { ... }</c> and two option sets with the same values
+/// compare equal; reference-typed options (<see cref="HttpClient"/>, <see cref="Logger"/>,
+/// <see cref="DefaultHeaders"/>, <see cref="TimeProvider"/>) compare by reference.
 /// </summary>
-public sealed class TypeSafeClientOptions
+public sealed record TypeSafeClientOptions
 {
     /// <summary>Required API key; falls back to <c>TYPESAFE_API_KEY</c>.</summary>
     public string? ApiKey { get; init; }
@@ -51,4 +54,25 @@ public sealed class TypeSafeClientOptions
 
     /// <summary>Logger receiving SDK messages at <see cref="LogLevel"/> and above. Default: a prefixed logger writing to standard error.</summary>
     public ILogger? Logger { get; init; }
+
+    /// <summary>
+    /// Clock used for retry sleeps, <c>Retry-After</c> date maths, and elapsed-time measurement.
+    /// Default: <see cref="System.TimeProvider.System"/>. Substitute a fake provider to drive retry
+    /// timing from a test instead of waiting on the wall clock.
+    /// </summary>
+    public TimeProvider TimeProvider { get; init; } = TimeProvider.System;
+
+    /// <summary>
+    /// A redacted description of these options. The compiler-generated record <c>ToString</c> would
+    /// print every property, so this override replaces it: <see cref="ApiKey"/> is shown only as
+    /// <c>[redacted]</c> or <c>null</c>, and <see cref="DefaultHeaders"/> — which may itself carry
+    /// credentials — is not printed at all.
+    /// </summary>
+    /// <returns>A string that never contains the API key or any default header value.</returns>
+    public override string ToString() =>
+        $"TypeSafeClientOptions {{ ApiKey = {(ApiKey is null ? "null" : "[redacted]")}, " +
+        $"BaseUrl = {BaseUrl ?? "null"}, DefaultModel = {DefaultModel ?? "null"}, " +
+        $"Timeout = {(Timeout is { } timeout ? timeout.ToString() : "null")}, " +
+        $"Retry = {(Retry is null ? "null" : "set")}, LogLevel = {(LogLevel is { } level ? level.ToString() : "null")}, " +
+        $"DisposeHttpClient = {DisposeHttpClient} }}";
 }

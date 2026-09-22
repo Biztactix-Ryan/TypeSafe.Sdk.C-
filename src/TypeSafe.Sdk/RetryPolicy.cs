@@ -105,11 +105,18 @@ public sealed record RetryPolicy
     /// Calculate the delay before a zero-based retry attempt: an allowed server delay from the
     /// response headers, otherwise capped exponential backoff with jitter.
     /// </summary>
-    public TimeSpan DelayFor(int attempt, IReadOnlyDictionary<string, string>? headers = null, Random? random = null)
+    public TimeSpan DelayFor(int attempt, IReadOnlyDictionary<string, string>? headers = null, Random? random = null) =>
+        DelayFor(attempt, headers, TimeProvider.System, random);
+
+    /// <summary>
+    /// The same calculation against an injected clock, so <c>Retry-After</c> HTTP dates are measured
+    /// from the transport's <see cref="TimeProvider"/> rather than the wall clock.
+    /// </summary>
+    internal TimeSpan DelayFor(int attempt, IReadOnlyDictionary<string, string>? headers, TimeProvider timeProvider, Random? random = null)
     {
         if (RespectRetryAfter && headers is not null)
         {
-            var retryAfter = RetryAfterParser.Parse(headers);
+            var retryAfter = RetryAfterParser.Parse(headers, timeProvider: timeProvider);
             if (retryAfter is { } serverDelay && serverDelay <= MaxRetryAfter) return serverDelay;
         }
         var exponential = Math.Min(BackoffInitial.TotalMilliseconds * Math.Pow(2, attempt), BackoffMax.TotalMilliseconds);

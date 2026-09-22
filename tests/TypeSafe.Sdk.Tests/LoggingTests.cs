@@ -83,6 +83,81 @@ public class LoggingTests
         Assert.Empty(logger.Entries);
     }
 
+    [Fact]
+    public async Task ResponseEventCarriesRequestIdAndStatusCodeAsProperties()
+    {
+        var logger = new CapturingLogger();
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody, ("x-typesafe-request-id", "req-42")));
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Logger = logger;
+            o.LogLevel = LogLevel.Information;
+        });
+
+        await client.SystemOneAsync("x", Clients.SampleQuestions());
+
+        // 1003 is the response-received event that carries a server request id (see TransportLog).
+        var entry = logger.Event(1003);
+        Assert.Equal(nameof(TransportLog.ResponseReceivedWithRequestId), entry.EventId.Name);
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Equal("req-42", entry.Property("RequestId"));
+        Assert.Equal(200, entry.Property("StatusCode"));
+        Assert.Equal(1, entry.Property("Attempt"));
+        Assert.Equal(1, entry.Property("RequestNumber"));
+        Assert.Equal("POST", entry.Property("Method"));
+        Assert.Equal("/v1/systemone", entry.Property("Path"));
+        var elapsed = Assert.IsType<long>(entry.Property("ElapsedMs"));
+        Assert.True(elapsed >= 0, $"ElapsedMs should be non-negative but was {elapsed}.");
+    }
+
+    [Fact]
+    public async Task ResponseEventWithoutARequestIdUsesTheOtherEventId()
+    {
+        var logger = new CapturingLogger();
+        var handler = new StubHandler((_, _) => Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Logger = logger;
+            o.LogLevel = LogLevel.Information;
+        });
+
+        await client.SystemOneAsync("x", Clients.SampleQuestions());
+
+        // No request id header, so the server-id-less variant, 1002, is logged instead of 1003.
+        var entry = logger.Event(1002);
+        Assert.Equal(nameof(TransportLog.ResponseReceived), entry.EventId.Name);
+        Assert.False(entry.Has("RequestId"));
+        Assert.Equal(200, entry.Property("StatusCode"));
+        Assert.Equal(1, entry.Property("Attempt"));
+        Assert.True(Assert.IsType<long>(entry.Property("ElapsedMs")) >= 0);
+        Assert.DoesNotContain(logger.Entries, e => e.EventId.Id == 1003);
+    }
+
+    [Fact]
+    public async Task RetryScheduledEventCarriesDelayAndRetryCountsAsProperties()
+    {
+        var logger = new CapturingLogger();
+        var handler = new StubHandler((_, attempt) => attempt == 0 ? Http.Json(500, "{}") : Http.Json(200, Http.SystemOneBody));
+        using var client = Clients.Create(handler, o =>
+        {
+            o.Logger = logger;
+            o.LogLevel = LogLevel.Information;
+        });
+
+        await client.SystemOneAsync("x", Clients.SampleQuestions());
+
+        var entry = logger.Event(1009);
+        Assert.Equal(nameof(TransportLog.RetryScheduled), entry.EventId.Name);
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Equal(1, entry.Property("Retry"));
+        Assert.Equal(2, entry.Property("TotalRetries"));
+        Assert.Equal("500", entry.Property("Reason"));
+        Assert.Equal("POST", entry.Property("Method"));
+        Assert.Equal("/v1/systemone", entry.Property("Path"));
+        var delay = Assert.IsType<long>(entry.Property("DelayMs"));
+        Assert.True(delay >= 0, $"DelayMs should be non-negative but was {delay}.");
+    }
+
     [Theory]
     [InlineData("Authorization", "Bearer sk-live-1234567890", "Bearer ***7890")]
     [InlineData("authorization", "Bearer short", "Bearer ***")]

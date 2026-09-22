@@ -43,7 +43,10 @@ internal sealed class AnswerMapConverter : JsonConverter<IReadOnlyDictionary<str
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw Invalid(Root);
 
-        var answers = new Dictionary<string, Answer>(StringComparer.Ordinal);
+        // An OrderedDictionary so the map keeps the order the server wrote it in: entries are added as
+        // they are read, and SystemOneResponse hands the same instance out as its Answers, where
+        // SystemOneResponse.GetAt reads it by position.
+        var answers = new OrderedDictionary<string, Answer>(StringComparer.Ordinal);
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndObject) return answers;

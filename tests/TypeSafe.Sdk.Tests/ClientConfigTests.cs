@@ -169,4 +169,51 @@ public class ClientConfigTests
         };
         Assert.Throws<TypeSafeException>(() => new TypeSafeClient(new TypeSafeClientOptions { ApiKey = "k", Retry = policy }));
     }
+
+    [Fact]
+    public void WithKeepsTheOtherOptionValues()
+    {
+        var logger = new CapturingLogger();
+        var options = new TypeSafeClientOptions
+        {
+            ApiKey = "k",
+            BaseUrl = "https://code.example",
+            DefaultModel = "code-model",
+            Timeout = TimeSpan.FromSeconds(5),
+            Logger = logger,
+            LogLevel = LogLevel.Error,
+        };
+
+        var slower = options with { Timeout = TimeSpan.FromSeconds(30) };
+
+        Assert.Equal(TimeSpan.FromSeconds(30), slower.Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), options.Timeout);
+        Assert.Equal("k", slower.ApiKey);
+        Assert.Equal("https://code.example", slower.BaseUrl);
+        Assert.Equal("code-model", slower.DefaultModel);
+        Assert.Same(logger, slower.Logger);
+        Assert.Equal(LogLevel.Error, slower.LogLevel);
+        Assert.Same(options.TimeProvider, slower.TimeProvider);
+        Assert.NotEqual(options, slower);
+        Assert.Equal(options, options with { });
+    }
+
+    [Fact]
+    public void ToStringDoesNotPrintTheApiKey()
+    {
+        var options = new TypeSafeClientOptions
+        {
+            ApiKey = "sk-super-secret-value",
+            BaseUrl = "https://code.example",
+            DefaultHeaders = new Dictionary<string, string> { ["X-Auth"] = "header-secret" },
+        };
+
+        var text = options.ToString();
+
+        Assert.DoesNotContain("sk-super-secret-value", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("header-secret", text, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", text, StringComparison.Ordinal);
+        Assert.Contains("https://code.example", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("sk-super-secret-value", $"{options}", StringComparison.Ordinal);
+    }
 }

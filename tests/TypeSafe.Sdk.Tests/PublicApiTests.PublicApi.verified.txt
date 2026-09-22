@@ -12,6 +12,18 @@
         [System.Text.Json.Serialization.JsonIgnore]
         public virtual string Type { get; }
     }
+    public static class AnswerDictionaryExtensions
+    {
+        public static System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ChoiceAnswer> get_Choices(System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers) { }
+        public static System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.NoulAnswer> get_Nouls(System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers) { }
+        public static System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ScoreAnswer> get_Scores(System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers) { }
+        extension(System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers)
+        {
+            public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.NoulAnswer> Nouls { get; }
+            public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ChoiceAnswer> Choices { get; }
+            public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ScoreAnswer> Scores { get; }
+        }
+    }
     public abstract class ApiResponse
     {
         protected ApiResponse() { }
@@ -165,18 +177,18 @@
         [System.Text.Json.Serialization.JsonIgnore]
         public abstract string Type { get; }
         public static TypeSafe.ChoiceQuestion Choice(TypeSafe.Content instructions, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Content>> criteria) { }
-        public static TypeSafe.ChoiceQuestion Choice(TypeSafe.Content instructions, params string[] labels) { }
+        public static TypeSafe.ChoiceQuestion Choice(TypeSafe.Content instructions, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<string> labels) { }
         public static TypeSafe.RawQuestion FromJson(System.Text.Json.Nodes.JsonObject json) { }
         public static TypeSafe.NoulQuestion Noul(TypeSafe.Content instructions = default, TypeSafe.Content whenTrue = default, TypeSafe.Content whenFalse = default) { }
-        public static TypeSafe.ScoreQuestion Score(TypeSafe.Content instructions, params TypeSafe.Content[] criteria) { }
+        public static TypeSafe.ScoreQuestion Score(TypeSafe.Content instructions, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<TypeSafe.Content> criteria) { }
         public static class Named
         {
             public static TypeSafe.Named<TypeSafe.ChoiceAnswer> Choice(string name, TypeSafe.Content instructions, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Content>> criteria) { }
-            public static TypeSafe.Named<TypeSafe.ChoiceAnswer> Choice(string name, TypeSafe.Content instructions, params string[] labels) { }
+            public static TypeSafe.Named<TypeSafe.ChoiceAnswer> Choice(string name, TypeSafe.Content instructions, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<string> labels) { }
             public static TypeSafe.Named<TypeSafe.ChoiceAnswer<TEnum>> Choice<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum>(string name, TypeSafe.Content instructions = default)
                 where TEnum :  struct, System.Enum { }
             public static TypeSafe.Named<TypeSafe.NoulAnswer> Noul(string name, TypeSafe.Content instructions = default, TypeSafe.Content whenTrue = default, TypeSafe.Content whenFalse = default) { }
-            public static TypeSafe.Named<TypeSafe.ScoreAnswer> Score(string name, TypeSafe.Content instructions, params TypeSafe.Content[] criteria) { }
+            public static TypeSafe.Named<TypeSafe.ScoreAnswer> Score(string name, TypeSafe.Content instructions, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<TypeSafe.Content> criteria) { }
             public static TypeSafe.Named<TypeSafe.ScoreAnswer<TEnum>> Score<[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields)]  TEnum>(string name, TypeSafe.Content instructions = default)
                 where TEnum :  struct, System.Enum { }
         }
@@ -191,7 +203,7 @@
         [System.Text.Json.Serialization.JsonIgnore]
         public override string Type { get; }
     }
-    public sealed class RequestOptions
+    public sealed class RequestOptions : System.IEquatable<TypeSafe.RequestOptions>
     {
         public RequestOptions() { }
         public System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, string>>? Headers { get; init; }
@@ -278,12 +290,14 @@
         public SystemOneResponse(string model, TypeSafe.Usage usage, System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> answers) { }
         public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.Answer> Answers { get; }
         public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ChoiceAnswer> Choices { get; }
+        public int Count { get; }
         public string Model { get; }
         public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.NoulAnswer> Nouls { get; }
         public System.Collections.Generic.IReadOnlyDictionary<string, TypeSafe.ScoreAnswer> Scores { get; }
         public TypeSafe.Usage Usage { get; }
         public TAnswer Get<TAnswer>(TypeSafe.Named<TAnswer> question)
             where TAnswer : TypeSafe.Answer { }
+        public System.Collections.Generic.KeyValuePair<string, TypeSafe.Answer> GetAt(int index) { }
         public bool TryGet<TAnswer>(TypeSafe.Named<TAnswer> question, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TAnswer? answer)
             where TAnswer : TypeSafe.Answer { }
     }
@@ -340,7 +354,7 @@
         public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, TypeSafe.Question>> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
         public System.Threading.Tasks.Task<TypeSafe.SystemOneResponse> SystemOneAsync(TypeSafe.Content state, System.ReadOnlySpan<TypeSafe.INamedQuestion> questions, string? model = null, TypeSafe.RequestOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { }
     }
-    public sealed class TypeSafeClientOptions
+    public sealed class TypeSafeClientOptions : System.IEquatable<TypeSafe.TypeSafeClientOptions>
     {
         public TypeSafeClientOptions() { }
         public string? ApiKey { get; init; }
@@ -353,7 +367,9 @@
         public Microsoft.Extensions.Logging.LogLevel? LogLevel { get; init; }
         public Microsoft.Extensions.Logging.ILogger? Logger { get; init; }
         public TypeSafe.RetryPolicy? Retry { get; init; }
+        public System.TimeProvider TimeProvider { get; init; }
         public System.TimeSpan? Timeout { get; init; }
+        public override string ToString() { }
     }
     public static class TypeSafeConstants
     {

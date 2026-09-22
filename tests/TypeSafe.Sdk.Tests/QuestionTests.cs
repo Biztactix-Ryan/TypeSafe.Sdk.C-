@@ -74,6 +74,54 @@ public class QuestionTests
     }
 
     [Fact]
+    public void BuildersAcceptAnExplicitArrayForTheirSpanParameter()
+    {
+        // An array converts to ReadOnlySpan<T>, so a caller holding one keeps compiling and serializing
+        // exactly as it did when these parameters were params T[].
+        string[] labels = ["calm", "angry"];
+        Content[] criteria = ["can wait", "today"];
+
+        Assert.Equal(
+            """{"type":"choice","instructions":"Tone?","criteria":{"calm":null,"angry":null}}""",
+            Wire(Question.Choice("Tone?", labels)));
+        Assert.Equal(
+            """{"type":"score","instructions":"How urgent?","criteria":["can wait","today"]}""",
+            Wire(Question.Score("How urgent?", criteria)));
+        Assert.Equal(
+            Wire(Question.Choice("Tone?", labels)),
+            Wire(Question.Named.Choice("tone", "Tone?", labels).Question));
+        Assert.Equal(
+            Wire(Question.Score("How urgent?", criteria)),
+            Wire(Question.Named.Score("urgency", "How urgent?", criteria).Question));
+    }
+
+    [Fact]
+    public void BuildersAcceptAnEmptySpanAndKeepTheirValidation()
+    {
+        // Zero labels reach the wire as an empty criteria object, exactly as zero params did.
+        Assert.Equal(
+            """{"type":"choice","instructions":"Tone?","criteria":{}}""",
+            Wire(Question.Choice("Tone?")));
+        Assert.Equal(
+            """{"type":"choice","instructions":"Tone?","criteria":{}}""",
+            Wire(Question.Named.Choice("tone", "Tone?").Question, "tone"));
+
+        // Zero criteria still fail score validation with the same message, from either builder.
+        foreach (var empty in new Func<Question>[]
+        {
+            static () => Question.Score("Urgency?"),
+            static () => Question.Score("Urgency?", []),
+            static () => Question.Named.Score("urgency", "Urgency?").Question,
+            static () => Question.Named.Score("urgency", "Urgency?", System.Array.Empty<Content>()).Question,
+        })
+        {
+            var error = Assert.Throws<TypeSafeException>(() => Wire(empty(), "urgency"));
+            Assert.Contains("\"urgency\"", error.Message);
+            Assert.Contains("at least one score", error.Message);
+        }
+    }
+
+    [Fact]
     public void RawQuestionsForwardEveryField()
     {
         var raw = Question.FromJson(new JsonObject

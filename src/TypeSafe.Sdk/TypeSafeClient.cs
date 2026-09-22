@@ -173,7 +173,8 @@ public sealed class TypeSafeClient : ITypeSafeClient
             Timeout = ValidateTimeout(options.Timeout ?? TypeSafeConstants.DefaultTimeout);
         }
 
-        _transport = new Transport(_http, apiKey, BaseUrl, DefaultHeaders, Timeout, Retry, new SdkLog(Logger, LogLevel));
+        _transport = new Transport(
+            _http, apiKey, BaseUrl, DefaultHeaders, Timeout, Retry, options.TimeProvider, new FilteredLogger(Logger, LogLevel));
         Models = new ModelsResource(_transport);
     }
 
@@ -302,14 +303,15 @@ public sealed class TypeSafeClient : ITypeSafeClient
             foreach (var (key, value) in request.ExtraBody) body[key] = value?.DeepClone();
         }
 
-        var log = _transport.Log;
+        var logger = _transport.Logger;
         return _transport.SendAsync(
             HttpMethod.Post,
             Protocol.SystemOnePath,
             body,
             options,
             TypeSafeJsonContext.Default.SystemOneBody,
-            decoded => SystemOneResponse.FromBody(decoded, log.Warn),
+            decoded => SystemOneResponse.FromBody(
+                decoded, (question, type) => TransportLog.UnknownAnswerType(logger, question, type)),
             cancellationToken);
     }
 

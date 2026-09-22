@@ -29,30 +29,31 @@ internal static class LogLevelParser
     }
 }
 
-/// <summary>A logger filtered to a minimum level that formats messages with the <c>[typesafe-sdk]</c> prefix.</summary>
-internal sealed class SdkLog
+/// <summary>
+/// Applies the SDK's own minimum level (<c>TYPESAFE_LOG_LEVEL</c> or <c>TypeSafeClientOptions.LogLevel</c>)
+/// on top of the caller's logger, which keeps its own filtering. Records below the minimum never reach it,
+/// and <see cref="LogLevel.None"/> silences the SDK entirely. All SDK events are written through
+/// <see cref="TransportLog"/>.
+/// </summary>
+internal sealed class FilteredLogger : ILogger
 {
-    private readonly ILogger _logger;
+    private readonly ILogger _inner;
     private readonly LogLevel _minimum;
 
-    public SdkLog(ILogger logger, LogLevel minimum)
+    public FilteredLogger(ILogger inner, LogLevel minimum)
     {
-        _logger = logger;
+        _inner = inner;
         _minimum = minimum;
     }
 
-    public bool IsEnabled(LogLevel level) =>
-        _minimum != LogLevel.None && level >= _minimum && _logger.IsEnabled(level);
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => _inner.BeginScope(state);
 
-    public void Debug(string message) => Write(LogLevel.Debug, message);
-    public void Info(string message) => Write(LogLevel.Information, message);
-    public void Warn(string message) => Write(LogLevel.Warning, message);
-    public void Error(string message) => Write(LogLevel.Error, message);
+    public bool IsEnabled(LogLevel logLevel) =>
+        _minimum != LogLevel.None && logLevel >= _minimum && _inner.IsEnabled(logLevel);
 
-    private void Write(LogLevel level, string message)
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
     {
-        // Messages may contain JSON braces, so they are passed as a value rather than as a template.
-        if (IsEnabled(level)) _logger.Log(level, "{Message}", message);
+        if (IsEnabled(logLevel)) _inner.Log(logLevel, eventId, state, exception, formatter);
     }
 }
 

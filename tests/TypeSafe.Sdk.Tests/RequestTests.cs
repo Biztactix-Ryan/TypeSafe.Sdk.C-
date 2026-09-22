@@ -279,4 +279,28 @@ public class RequestTests
         Assert.Equal("At least one question is required.", error.Message);
         Assert.Empty(handler.Requests);
     }
+
+    [Fact]
+    public void RequestOptionsWithTheSameValuesAreEqual()
+    {
+        var headers = new Dictionary<string, string> { ["X-Trace"] = "t-1" };
+        var first = new RequestOptions
+        {
+            Timeout = TimeSpan.FromSeconds(5),
+            Retry = RetryPolicy.None,
+            Headers = headers,
+        };
+        var second = new RequestOptions
+        {
+            Timeout = TimeSpan.FromSeconds(5),
+            Retry = RetryPolicy.None,
+            Headers = headers,
+        };
+
+        Assert.Equal(first, second);
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.NotEqual(first, first with { Timeout = TimeSpan.FromSeconds(6) });
+        // Headers is a collection, so equality over it is by reference, not by content.
+        Assert.NotEqual(first, first with { Headers = new Dictionary<string, string> { ["X-Trace"] = "t-1" } });
+    }
 }

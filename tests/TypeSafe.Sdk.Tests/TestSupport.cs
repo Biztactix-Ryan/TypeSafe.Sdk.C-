@@ -108,19 +108,48 @@ internal static class Http
         """;
 }
 
-/// <summary>Collects SDK log lines for assertions.</summary>
+/// <summary>
+/// One captured log record: the level and formatted message, plus the <see cref="EventId"/> and the
+/// structured state a <c>[LoggerMessage]</c> event carries, so tests can assert named properties.
+/// </summary>
+internal sealed record LogEntry(
+    LogLevel Level,
+    EventId EventId,
+    string Message,
+    IReadOnlyList<KeyValuePair<string, object?>> State)
+{
+    /// <summary>The value logged under <paramref name="name"/>; null when the event carries no such property.</summary>
+    public object? Property(string name) =>
+        State.FirstOrDefault(pair => pair.Key == name).Value;
+
+    /// <summary>Whether the event carries a property called <paramref name="name"/> at all.</summary>
+    public bool Has(string name) => State.Any(pair => pair.Key == name);
+}
+
+/// <summary>Collects SDK log records for assertions.</summary>
 internal sealed class CapturingLogger : ILogger
 {
-    public List<(LogLevel Level, string Message)> Entries { get; } = new();
+    private static readonly IReadOnlyList<KeyValuePair<string, object?>> NoState = Array.Empty<KeyValuePair<string, object?>>();
+
+    public List<LogEntry> Entries { get; } = new();
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-        Entries.Add((logLevel, formatter(state, exception)));
+        // Source-generated log state implements IReadOnlyList<KeyValuePair<string, object?>>; anything
+        // else (a plain string, say) is recorded with no structured properties.
+        Entries.Add(new LogEntry(
+            logLevel,
+            eventId,
+            formatter(state, exception),
+            state as IReadOnlyList<KeyValuePair<string, object?>> ?? NoState));
 
     public IEnumerable<string> Messages(LogLevel level) => Entries.Where(e => e.Level == level).Select(e => e.Message);
+
+    /// <summary>The single record logged under <paramref name="eventId"/>; fails the test when there is not exactly one.</summary>
+    public LogEntry Event(int eventId) => Assert.Single(Entries, e => e.EventId.Id == eventId);
 }
 
 internal static class Clients
@@ -153,6 +182,7 @@ internal static class Clients
             Retry = setup.Retry,
             LogLevel = setup.LogLevel ?? LogLevel.None,
             Logger = setup.Logger,
+            TimeProvider = setup.TimeProvider ?? TimeProvider.System,
         });
     }
 
@@ -180,6 +210,8 @@ internal sealed class ClientSetup
     public LogLevel? LogLevel { get; set; }
 
     public ILogger? Logger { get; set; }
+
+    public TimeProvider? TimeProvider { get; set; }
 }
 
 /// <summary>Sets environment variables for the duration of a test and restores them afterwards.</summary>

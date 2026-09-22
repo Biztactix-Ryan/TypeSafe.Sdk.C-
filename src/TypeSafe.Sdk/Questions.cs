@@ -8,8 +8,8 @@ namespace TypeSafe;
 
 /// <summary>
 /// A question to ask about a state, identified by its <see cref="Type"/>. Create questions with the
-/// static builders <see cref="Noul(Content, Content, Content)"/>, <see cref="Choice(Content, string[])"/>,
-/// <see cref="Score(Content, Content[])"/>, or <see cref="FromJson(JsonObject)"/> for raw dictionaries.
+/// static builders <see cref="Noul(Content, Content, Content)"/>, <see cref="Choice(Content, ReadOnlySpan{string})"/>,
+/// <see cref="Score(Content, ReadOnlySpan{Content})"/>, or <see cref="FromJson(JsonObject)"/> for raw dictionaries.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -67,11 +67,10 @@ public abstract record Question
     /// See the <see href="https://docs.typesafe.ai/primitives/choice">choice primitive</see> for details.
     /// </summary>
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
-    /// <param name="labels">The available labels.</param>
-    public static ChoiceQuestion Choice(Content instructions, params string[] labels)
+    /// <param name="labels">The available labels; the span is copied, so nothing is retained.</param>
+    public static ChoiceQuestion Choice(Content instructions, params ReadOnlySpan<string> labels)
     {
-        ArgumentNullException.ThrowIfNull(labels);
-        var criteria = new Dictionary<string, JsonNode?>();
+        var criteria = new Dictionary<string, JsonNode?>(labels.Length);
         foreach (var label in labels) criteria[label] = null;
         return new ChoiceQuestion(instructions.Node, criteria);
     }
@@ -97,11 +96,10 @@ public abstract record Question
     /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
     /// <param name="criteria">
     /// Descriptions indexed by score from zero, at least one; the default <see cref="Content"/> leaves a
-    /// score undescribed.
+    /// score undescribed. The span is copied, so nothing is retained.
     /// </param>
-    public static ScoreQuestion Score(Content instructions, params Content[] criteria)
+    public static ScoreQuestion Score(Content instructions, params ReadOnlySpan<Content> criteria)
     {
-        ArgumentNullException.ThrowIfNull(criteria);
         var descriptions = new List<JsonNode?>(criteria.Length);
         foreach (var description in criteria) descriptions.Add(description.Node);
         return new ScoreQuestion(instructions.Node, descriptions);
@@ -133,7 +131,7 @@ public abstract record Question
     /// The name-first builders live behind <c>Question.Named</c> instead of overloading the positional
     /// ones deliberately. A string argument binds to a <c>string name</c> parameter by an identity
     /// conversion, which is better than the user-defined conversion to <see cref="Content"/>, so a
-    /// name-first overload sitting beside <see cref="Question.Choice(Content, string[])"/> would silently re-read
+    /// name-first overload sitting beside <see cref="Question.Choice(Content, ReadOnlySpan{string})"/> would silently re-read
     /// <c>Question.Choice("Tone?", "calm", "angry")</c> as a name, instructions and a single label.
     /// Members of two different types never overload each other, so both families keep their meaning.
     /// </remarks>
@@ -158,9 +156,9 @@ public abstract record Question
         /// </summary>
         /// <param name="name">The name the answer is read with; must not be empty or whitespace.</param>
         /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
-        /// <param name="labels">The available labels.</param>
+        /// <param name="labels">The available labels; the span is copied, so nothing is retained.</param>
         /// <exception cref="TypeSafeException"><paramref name="name"/> is empty or whitespace.</exception>
-        public static Named<ChoiceAnswer> Choice(string name, Content instructions, params string[] labels) =>
+        public static Named<ChoiceAnswer> Choice(string name, Content instructions, params ReadOnlySpan<string> labels) =>
             new(name, Question.Choice(instructions, labels));
 
         /// <summary>
@@ -205,10 +203,10 @@ public abstract record Question
         /// <param name="instructions">The question as text, a JSON object, or an array; optional.</param>
         /// <param name="criteria">
         /// Descriptions indexed by score from zero, at least one; the default <see cref="Content"/> leaves a
-        /// score undescribed.
+        /// score undescribed. The span is copied, so nothing is retained.
         /// </param>
         /// <exception cref="TypeSafeException"><paramref name="name"/> is empty or whitespace.</exception>
-        public static Named<ScoreAnswer> Score(string name, Content instructions, params Content[] criteria) =>
+        public static Named<ScoreAnswer> Score(string name, Content instructions, params ReadOnlySpan<Content> criteria) =>
             new(name, Question.Score(instructions, criteria));
 
         /// <summary>

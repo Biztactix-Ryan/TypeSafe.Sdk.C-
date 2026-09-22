@@ -1,7 +1,11 @@
 namespace TypeSafe;
 
-/// <summary>Per-call options that override client settings for a single request.</summary>
-public sealed class RequestOptions
+/// <summary>
+/// Per-call options that override client settings for a single request. This is a <c>record</c>:
+/// derive a variant with <c>options with { ... }</c>, and two option sets with the same values
+/// compare equal (<see cref="Headers"/>, being a collection, compares by reference).
+/// </summary>
+public sealed record RequestOptions
 {
     /// <summary>Timeout per attempt; <c>null</c> inherits the client setting. There is no total budget unless <see cref="RetryPolicy.TotalTimeout"/> is set.</summary>
     public TimeSpan? Timeout { get; init; }

@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -18,8 +18,12 @@ internal sealed class Transport
     private readonly IReadOnlyDictionary<string, string> _defaultHeaders;
     private readonly TimeSpan _timeout;
     private readonly RetryPolicy _retry;
-    private readonly SdkLog _log;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
     private int _requestCount;
+
+    /// <summary>Identifies one call in the logs: its per-client number, method, and path.</summary>
+    private readonly record struct RequestTag(int Number, string Method, string Path);
 
     public Transport(
         HttpClient http,
@@ -28,7 +32,8 @@ internal sealed class Transport
         IReadOnlyDictionary<string, string> defaultHeaders,
         TimeSpan timeout,
         RetryPolicy retry,
-        SdkLog log)
+        TimeProvider timeProvider,
+        ILogger logger)
     {
         _http = http;
         _apiKey = apiKey;
@@ -36,10 +41,12 @@ internal sealed class Transport
         _defaultHeaders = defaultHeaders;
         _timeout = timeout;
         _retry = retry;
-        _log = log;
+        _timeProvider = timeProvider;
+        _logger = logger;
     }
 
-    public SdkLog Log => _log;
+    /// <summary>The level-filtered logger every SDK event is written through.</summary>
+    public ILogger Logger => _logger;
 
     /// <summary>Send a JSON request with retries and decode the successful response.</summary>
     /// <param name="method">HTTP method.</param>
@@ -71,8 +78,8 @@ internal sealed class Transport
         var headers = BuildHeaders(options?.Headers, body is not null);
         var content = body is null ? null : JsonSerializer.Serialize(body, TypeSafeJsonContext.Default.JsonObject);
         // Numbered so concurrent requests, and the attempts within one, can be told apart in the logs.
-        var tag = $"#{Interlocked.Increment(ref _requestCount)} {method} {path}";
-        var started = Stopwatch.GetTimestamp();
+        var tag = new RequestTag(Interlocked.Increment(ref _requestCount), method.Method, path);
+        var started = _timeProvider.GetTimestamp();
 
         for (var attempt = 0; ; attempt++)
         {
@@ -83,10 +90,13 @@ internal sealed class Transport
                 {
                     [Protocol.RetryCountHeader] = attempt.ToString(),
                 };
-            if (_log.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
-                _log.Debug($"{tag} -> {url} headers={Redaction.Describe(attemptHeaders)} body={content ?? "(none)"}");
+            // Describing the headers costs a string per attempt, so it stays behind the level check.
+            if (_logger.IsEnabled(LogLevel.Debug))
+                TransportLog.RequestSending(
+                    _logger, tag.Number, tag.Method, tag.Path, url, attempt + 1,
+                    Redaction.Describe(attemptHeaders), content ?? "(none)");
 
-            var attemptStarted = Stopwatch.GetTimestamp();
+            var attemptStarted = _timeProvider.GetTimestamp();
             HttpResponseMessage response;
             try
             {
@@ -103,7 +113,12 @@ internal sealed class Transport
             var requestId = HeaderSnapshot.RequestId(responseHeaders);
             var statusCode = response.StatusCode;
             var status = (int)statusCode;
-            _log.Info($"{tag} <- {status} in {Elapsed(attemptStarted)}{(requestId is null ? "" : $" (request {requestId})")}");
+            var attemptElapsedMs = ElapsedMs(attemptStarted);
+            if (requestId is null)
+                TransportLog.ResponseReceived(_logger, tag.Number, tag.Method, tag.Path, status, attemptElapsedMs, attempt + 1);
+            else
+                TransportLog.ResponseReceivedWithRequestId(
+                    _logger, tag.Number, tag.Method, tag.Path, status, attemptElapsedMs, attempt + 1, requestId);
 
             string? text;
             try
@@ -119,8 +134,9 @@ internal sealed class Transport
                 continue;
             }
 
-            if (_log.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
-                _log.Debug($"{tag} <- headers={Redaction.Describe(responseHeaders)} body={text}");
+            if (_logger.IsEnabled(LogLevel.Debug))
+                TransportLog.ResponseBody(
+                    _logger, tag.Number, tag.Method, tag.Path, Redaction.Describe(responseHeaders), text);
 
             TypeSafeApiException failure;
             if (response.IsSuccessStatusCode)
@@ -198,7 +214,7 @@ internal sealed class Transport
     /// and the timeout share one cancellation; the caller's token is checked first to choose the error.
     /// </summary>
     private async Task<HttpResponseMessage> AttemptAsync(
-        string tag,
+        RequestTag tag,
         HttpMethod method,
         string url,
         IReadOnlyDictionary<string, string> headers,
@@ -223,7 +239,7 @@ internal sealed class Transport
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (timeout != System.Threading.Timeout.InfiniteTimeSpan) timeoutSource.CancelAfter(timeout);
 
-        var started = Stopwatch.GetTimestamp();
+        var started = _timeProvider.GetTimestamp();
         try
         {
             // ResponseContentRead buffers the whole body under the timeout, so interrupted bodies surface here.
@@ -231,17 +247,19 @@ internal sealed class Transport
         }
         catch (OperationCanceledException error) when (cancellationToken.IsCancellationRequested)
         {
-            _log.Info($"{tag} cancelled by caller after {Elapsed(started)}");
+            TransportLog.RequestCancelled(_logger, tag.Number, tag.Method, tag.Path, ElapsedMs(started));
             throw new OperationCanceledException("The request was cancelled.", error, cancellationToken);
         }
         catch (OperationCanceledException error)
         {
-            _log.Info($"{tag} timed out after {Elapsed(started)}");
+            TransportLog.AttemptTimedOut(
+                _logger, tag.Number, tag.Method, tag.Path, ElapsedMs(started), (long)timeout.TotalMilliseconds);
             throw new TypeSafeApiTimeoutException(timeout, error);
         }
         catch (Exception error) when (error is HttpRequestException or IOException)
         {
-            _log.Info($"{tag} connection error after {Elapsed(started)}: {error.Message}");
+            TransportLog.ConnectionError(
+                _logger, tag.Number, tag.Method, tag.Path, ElapsedMs(started), error.Message);
             throw new TypeSafeApiConnectionException($"Connection error: {error.Message}", error, TransportErrorOf(error));
         }
     }
@@ -251,7 +269,7 @@ internal sealed class Transport
 
     /// <summary>Wait before retrying; throws the last error when the total budget would be exceeded and rethrows caller cancellation.</summary>
     private async Task BackOffAsync(
-        string tag,
+        RequestTag tag,
         int attempt,
         int retriesLeft,
         string reason,
@@ -261,26 +279,30 @@ internal sealed class Transport
         Exception lastError,
         CancellationToken cancellationToken)
     {
-        var delay = policy.DelayFor(attempt, headers);
-        if (policy.TotalTimeout is { } budget && Stopwatch.GetElapsedTime(started) + delay >= budget)
+        var delay = policy.DelayFor(attempt, headers, _timeProvider);
+        var delayMs = Milliseconds(delay);
+        if (policy.TotalTimeout is { } budget && _timeProvider.GetElapsedTime(started) + delay >= budget)
         {
-            _log.Info($"{tag} not retrying: a {delay.TotalMilliseconds:0}ms delay would exceed the {budget.TotalMilliseconds:0}ms retry budget");
+            TransportLog.RetryBudgetExceeded(
+                _logger, tag.Number, tag.Method, tag.Path, delayMs, Milliseconds(budget));
             ExceptionDispatchInfo.Capture(lastError).Throw();
         }
         var nth = attempt + 1;
         var total = attempt + retriesLeft;
-        _log.Info($"{tag} retrying in {delay.TotalMilliseconds:0}ms (retry {nth}/{total}) after {reason}");
+        TransportLog.RetryScheduled(_logger, tag.Number, tag.Method, tag.Path, delayMs, nth, total, reason);
         try
         {
-            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(delay, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException error)
         {
-            _log.Info($"{tag} cancelled by caller while waiting to retry");
+            TransportLog.RetryCancelled(_logger, tag.Number, tag.Method, tag.Path, nth);
             throw new OperationCanceledException("The request was cancelled while waiting to retry.", error, cancellationToken);
         }
     }
 
-    private static string Elapsed(long startedTimestamp) =>
-        $"{Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds:0}ms";
+    /// <summary>Elapsed time since a timestamp, rounded to whole milliseconds for the logs.</summary>
+    private long ElapsedMs(long startedTimestamp) => Milliseconds(_timeProvider.GetElapsedTime(startedTimestamp));
+
+    private static long Milliseconds(TimeSpan span) => (long)Math.Round(span.TotalMilliseconds, MidpointRounding.AwayFromZero);
 }
